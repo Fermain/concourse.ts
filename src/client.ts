@@ -1,19 +1,33 @@
 import { z } from "zod"; // Import z itself
 import { ConcourseApiError, ConcourseValidationError } from "./errors"; // Import custom API error and validation error
 // No need to import fetch, it's globally available
-import type { AtcInfo, AtcJob, AtcPipeline, AtcTeam, AtcWorker /*, AtcResource */ /*, AtcResourceType */ /*, AtcResourceVersion */ } from "./types/atc"; // Temporarily remove types
+import type {
+	AtcBuildSummary,
+	AtcInfo,
+	AtcJob,
+	AtcPipeline,
+	AtcResource,
+	AtcResourceType,
+	AtcResourceVersion,
+	AtcTeam,
+	AtcUser,
+	AtcUserInfo,
+	AtcVersion,
+	AtcWorker,
+} from "./types/atc"; // Restore all type imports
 import {
+	AtcBuildSummarySchema,
 	AtcInfoSchema,
 	AtcJobArraySchema,
 	AtcPipelineArraySchema,
-	AtcTeamArraySchema,
-	AtcWorkerArraySchema,
 	AtcResourceArraySchema,
-	AtcResourceTypeArraySchema,
 	AtcResourceSchema,
+	AtcResourceTypeArraySchema,
 	AtcResourceVersionArraySchema,
-	AtcBuildSummarySchema,
-	AtcCheckRequestBodySchema // Import schema
+	AtcTeamArraySchema,
+	AtcUserInfoSchema, // Needed for getUserInfo
+	AtcUserSchema, // Needed for listActiveUsersSince
+	AtcWorkerArraySchema,
 } from "./types/atc.schemas"; // Import Zod schemas
 
 // Placeholder for ATC types - we will define these properly later
@@ -164,55 +178,44 @@ export class ConcourseClient {
 
 	// --- Pipelines ---
 	async listPipelines(): Promise<AtcPipeline[]> {
-		// Placeholder implementation
-		console.warn("Method listPipelines not fully implemented yet.");
 		const response = await this.request("/pipelines");
 		return this.parseResponse(response, AtcPipelineArraySchema); // Use parseResponse helper
-		// TODO: Need to handle team-specific pipelines? Go client has Team interface.
 	}
 
 	// --- Teams ---
 	async listTeams(): Promise<AtcTeam[]> {
-		// Placeholder implementation
-		console.warn("Method listTeams not fully implemented yet.");
 		const response = await this.request("/teams");
 		return this.parseResponse(response, AtcTeamArraySchema); // Use parseResponse helper
 	}
 
 	// --- Jobs ---
 	async listAllJobs(): Promise<AtcJob[]> {
-		// Restore AtcJob[] type
-		// Placeholder implementation
-		console.warn("Method listAllJobs not fully implemented yet.");
 		const response = await this.request("/jobs");
 		return this.parseResponse(response, AtcJobArraySchema); // Use Zod schema for parsing
-		// TODO: Implement pipeline-specific job listing via Team interface
 	}
 
 	// --- Workers ---
 	async listWorkers(): Promise<AtcWorker[]> {
-		// Placeholder implementation - Now implementing
-		// console.warn("Method listWorkers not fully implemented yet.");
-		const response = await this.request('/workers');
+		const response = await this.request("/workers");
 		return this.parseResponse(response, AtcWorkerArraySchema);
 	}
 
 	// --- Users ---
-	async getUserInfo(): Promise<unknown> { // Placeholder
+	async getUserInfo(): Promise<AtcUserInfo> {
+		// Use AtcUserInfo
 		console.warn("Method getUserInfo not fully implemented yet.");
-		// TODO: Implement based on concourse/go-concourse/concourse/user.go
-		const response = await this.request('/user'); // Assuming endpoint
-		// TODO: Define AtcUserInfoSchema and use parseResponse
-		return await response.json();
+		const response = await this.request("/user");
+		return this.parseResponse(response, AtcUserInfoSchema);
 	}
 
-	async listActiveUsersSince(since: Date): Promise<unknown[]> { // Placeholder
+	async listActiveUsersSince(since: Date): Promise<AtcUser[]> {
+		// Use AtcUser[]
 		console.warn("Method listActiveUsersSince not fully implemented yet.");
-		// TODO: Implement based on concourse/go-concourse/concourse/users.go
 		const params = new URLSearchParams({ since: since.toISOString() });
-		const response = await this.request(`/users?${params.toString()}`); // Assuming endpoint
-		// TODO: Define AtcUserSchema and use parseResponse
-		return await response.json();
+		const response = await this.request(`/users?${params.toString()}`);
+		// TODO: Define AtcUserArraySchema
+		// return this.parseResponse(response, AtcUserArraySchema);
+		return await response.json(); // Keep as temp
 	}
 
 	// --- Resources ---
@@ -224,10 +227,13 @@ export class ConcourseClient {
 	 * @param pipelineName The name of the pipeline.
 	 * @returns A promise resolving to an array of resources.
 	 */
-	async listResources(teamName: string, pipelineName: string): Promise<unknown[]> { // Use unknown[] temporarily
+	async listResources(
+		teamName: string,
+		pipelineName: string,
+	): Promise<AtcResource[]> {
+		// Use AtcResource[]
 		const path = `/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resources`;
 		const response = await this.request(path);
-		// Still parse, but the static type checking is lost for now
 		return this.parseResponse(response, AtcResourceArraySchema);
 	}
 
@@ -239,10 +245,13 @@ export class ConcourseClient {
 	 * @param pipelineName The name of the pipeline.
 	 * @returns A promise resolving to an array of resource types.
 	 */
-	async listResourceTypes(teamName: string, pipelineName: string): Promise<unknown[]> { // Use unknown[] temporarily
+	async listResourceTypes(
+		teamName: string,
+		pipelineName: string,
+	): Promise<AtcResourceType[]> {
+		// Use AtcResourceType[]
 		const path = `/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resource-types`;
 		const response = await this.request(path);
-		// Still parse, but static type is lost
 		return this.parseResponse(response, AtcResourceTypeArraySchema);
 	}
 
@@ -255,10 +264,15 @@ export class ConcourseClient {
 	 * @param resourceName The name of the resource.
 	 * @returns A promise resolving to the resource details.
 	 */
-	async getResource(teamName: string, pipelineName: string, resourceName: string): Promise<unknown> { // Use unknown temporarily
+	async getResource(
+		teamName: string,
+		pipelineName: string,
+		resourceName: string,
+	): Promise<AtcResource> {
+		// Use AtcResource
 		const path = `/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resources/${encodeURIComponent(resourceName)}`;
 		const response = await this.request(path);
-		return this.parseResponse(response, AtcResourceSchema); // Use single resource schema
+		return this.parseResponse(response, AtcResourceSchema);
 	}
 
 	/**
@@ -275,20 +289,17 @@ export class ConcourseClient {
 		teamName: string,
 		pipelineName: string,
 		resourceName: string,
-		page?: Page
-	): Promise<unknown[]> { // Use unknown[] temporarily
+		page?: Page,
+	): Promise<AtcResourceVersion[]> {
+		// Use AtcResourceVersion[]
 		const path = `/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resources/${encodeURIComponent(resourceName)}/versions`;
 		const params = new URLSearchParams();
-		if (page?.limit) params.set('limit', String(page.limit));
-		if (page?.since) params.set('since', String(page.since));
-		if (page?.until) params.set('until', String(page.until));
-
+		if (page?.limit) params.set("limit", String(page.limit));
+		if (page?.since) params.set("since", String(page.since));
+		if (page?.until) params.set("until", String(page.until));
 		const fullPath = params.toString() ? `${path}?${params.toString()}` : path;
-
 		const response = await this.request(fullPath);
-		// TODO: Need to handle pagination headers returned by API
-		// The Go client returns `([]atc.ResourceVersion, Pagination, bool, error)`
-		// We currently only return the versions.
+		// TODO: Handle pagination headers
 		return this.parseResponse(response, AtcResourceVersionArraySchema);
 	}
 
@@ -306,24 +317,18 @@ export class ConcourseClient {
 		teamName: string,
 		pipelineName: string,
 		resourceName: string,
-		version?: Record<string, string> // Use generic Record temporarily
-	): Promise<unknown> { // Use unknown temporarily
+		version?: AtcVersion, // Use AtcVersion again
+	): Promise<AtcBuildSummary> {
+		// Use AtcBuildSummary
 		const path = `/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resources/${encodeURIComponent(resourceName)}/check`;
-
-		const options: RequestInit = {
-			method: 'POST',
-		};
-
+		const options: RequestInit = { method: "POST" };
 		if (version) {
-			// Validate the provided version object shape if needed (though not strictly required by Zod here)
-			const body = { from: version }; 
+			const body = { from: version };
 			options.body = JSON.stringify(body);
-			// Ensure content-type is set for POST with body
 			const headers = new Headers(options.headers);
-			headers.set('Content-Type', 'application/json');
+			headers.set("Content-Type", "application/json");
 			options.headers = headers;
 		}
-
 		const response = await this.request(path, options);
 		return this.parseResponse(response, AtcBuildSummarySchema);
 	}

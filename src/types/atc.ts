@@ -1,44 +1,9 @@
-// Based on concourse/atc/info.go
+// ========================================
+// Concourse ATC Type Definitions
+// Based on Go structs in concourse/atc/*
+// ========================================
 
-/**
- * Represents the information returned by the Concourse /api/v1/info endpoint.
- */
-export interface AtcInfo {
-	/** The version of the Concourse ATC (API and web UI). */
-	version: string;
-	/** The version of the Concourse workers expected by the ATC. */
-	worker_version: string;
-	/** A map of enabled feature flags. */
-	feature_flags: Record<string, boolean>;
-	/** The configured external URL of the Concourse instance (optional). */
-	external_url?: string; // omitempty in Go -> optional in TS
-	/** The configured cluster name of the Concourse instance (optional). */
-	cluster_name?: string; // omitempty in Go -> optional in TS
-}
-
-// Based on concourse/atc/team.go
-
-/**
- * Represents the authentication configuration for a team.
- * Keys are auth provider names (e.g., "github", "oidc", "basic").
- * Inner keys are typically "users" and "groups".
- * Values are arrays of user/group identifiers specific to the provider.
- */
-export type AtcTeamAuth = Record<string, Record<string, string[]>>;
-
-/**
- * Represents a Concourse team.
- */
-export interface AtcTeam {
-	/** The internal ID of the team (optional). */
-	id?: number;
-	/** The name of the team (optional). */
-	name?: string;
-	/** The authentication configuration for the team (optional). */
-	auth?: AtcTeamAuth;
-}
-
-// Based on concourse/atc/pipeline.go
+// --- Primitives / Base Types --- //
 
 /**
  * Represents pipeline instance variables (vars specified in `set_pipeline` or URL).
@@ -46,66 +11,323 @@ export interface AtcTeam {
  */
 export type AtcInstanceVars = Record<string, unknown>;
 
-// --- Group Config --- //
-// Based on concourse/atc/config.go
+/**
+ * Represents the specific version identifier for a resource.
+ * Keys and values are specific to the resource type (e.g., `ref` for git).
+ * Based on concourse/atc/resource_types.go
+ */
+export type AtcVersion = Record<string, string>;
 
+/**
+ * Represents the version configuration for a job input.
+ * In Go this was `*VersionConfig`, but seems to just be `Version`.
+ */
+export type AtcVersionConfig = AtcVersion;
+
+/**
+ * Possible statuses for a Concourse build.
+ * Based on concourse/atc/build.go
+ */
+export type AtcBuildStatus =
+	| "started"
+	| "pending"
+	| "succeeded"
+	| "failed"
+	| "errored"
+	| "aborted";
+
+/**
+ * Represents a metadata field associated with a resource version.
+ * Based on concourse/atc/resource_types.go
+ */
+export interface AtcMetadataField {
+	name: string;
+	value: string;
+}
+
+/**
+ * Represents the source configuration for a resource or resource type.
+ * Keys and values are specific to the resource type.
+ * Based on concourse/atc/resource_types.go
+ */
+export type AtcSource = Record<string, unknown>;
+
+/**
+ * Represents parameters passed to resource type actions (get, put).
+ * Keys and values are specific to the resource type.
+ * Based on concourse/atc/resource_types.go
+ */
+export type AtcParams = Record<string, unknown>;
+
+/**
+ * Represents the check interval configuration (`check_every`).
+ * Can be a duration string (e.g., "1m", "30s") or the literal "never".
+ * Based on concourse/atc/config.go
+ */
+export type AtcCheckEvery = string; // e.g., "1m", "1h", "never"
+
+/**
+ * Represents tags associated with resources, types, or steps.
+ * Based on concourse/atc/config.go / worker.go
+ */
+export type AtcTags = string[];
+
+/**
+ * Represents the source of an event, typically stdout or stderr for logs.
+ * Based on concourse/atc/event/events.go
+ */
+export type AtcOriginSource = "stdout" | "stderr";
+
+/**
+ * Represents the origin of an event within the build plan (e.g., a specific step).
+ * Based on concourse/atc/event/events.go
+ */
+export interface AtcOrigin {
+	id?: string | null;
+	source?: AtcOriginSource | null;
+}
+
+// --- Info --- //
+// Based on concourse/atc/info.go
+
+/**
+ * Represents the information returned by the Concourse /api/v1/info endpoint.
+ */
+export interface AtcInfo {
+	version: string;
+	worker_version: string;
+	feature_flags: Record<string, boolean>;
+	external_url?: string | null;
+	cluster_name?: string | null;
+}
+
+// --- Team --- //
+// Based on concourse/atc/team.go
+
+/**
+ * Represents the authentication configuration for a team.
+ */
+export type AtcTeamAuth = Record<string, Record<string, string[]>>;
+
+/**
+ * Represents a Concourse team.
+ */
+export interface AtcTeam {
+	id?: number | null;
+	name?: string | null;
+	auth?: AtcTeamAuth | null;
+}
+
+// --- Pipeline & Config --- //
+
+// Based on concourse/atc/config.go
 /**
  * Configuration for a pipeline group in the UI.
  */
 export interface AtcGroupConfig {
-	/** The name of the group. */
 	name: string;
-	/** List of job names belonging to this group (optional). */
-	jobs?: string[];
-	/** List of resource names belonging to this group (optional). */
-	resources?: string[];
+	jobs?: string[] | null;
+	resources?: string[] | null;
 }
 
-// --- Display Config --- //
 // Based on concourse/atc/config.go
-
 /**
  * Configuration for the pipeline's visual appearance in the UI.
  */
 export interface AtcDisplayConfig {
-	/** URL for a background image (optional). */
-	background_image?: string;
-	/** CSS filter to apply to the background image (optional). */
-	background_filter?: string;
+	background_image?: string | null;
+	background_filter?: string | null;
 }
 
+// Based on concourse/atc/pipeline.go
 /**
  * Represents a Concourse pipeline.
  */
 export interface AtcPipeline {
-	/** The internal ID of the pipeline. */
 	id: number;
-	/** The name of the pipeline. */
 	name: string;
-	/** Pipeline instance variables (optional). */
-	instance_vars?: AtcInstanceVars;
-	/** Whether the pipeline is paused. */
+	instance_vars?: AtcInstanceVars | null;
 	paused: boolean;
-	/** User who paused the pipeline (optional). */
-	paused_by?: string;
-	/** Unix timestamp when the pipeline was paused (optional). */
-	paused_at?: number;
-	/** Whether the pipeline is public (accessible without logging in). */
+	paused_by?: string | null;
+	paused_at?: number | null;
 	public: boolean;
-	/** Whether the pipeline is archived. */
 	archived: boolean;
-	/** Configuration for pipeline groups shown in the UI (optional). */
-	groups?: AtcGroupConfig[]; // Use AtcGroupConfig[] directly
-	/** The name of the team the pipeline belongs to. */
+	groups?: AtcGroupConfig[] | null;
 	team_name: string;
-	/** UI display configuration for the pipeline (optional). */
-	display?: AtcDisplayConfig; // Use AtcDisplayConfig directly
-	/** ID of the build that set the pipeline (optional). */
-	parent_build_id?: number;
-	/** ID of the job that set the pipeline (optional). */
-	parent_job_id?: number;
-	/** Unix timestamp when the pipeline was last updated (optional). */
-	last_updated?: number;
+	display?: AtcDisplayConfig | null;
+	parent_build_id?: number | null;
+	parent_job_id?: number | null;
+	last_updated?: number | null;
+}
+
+// --- Build --- //
+
+// Based on concourse/atc/build.go
+/**
+ * Information about the original build if this build is a re-run.
+ */
+export interface AtcRerunOfBuild {
+	id?: number | null;
+	name?: string | null;
+}
+
+// Based on concourse/atc/build.go
+/**
+ * Represents a Concourse build.
+ */
+export interface AtcBuild {
+	id: number;
+	team_name: string;
+	name: string;
+	status: AtcBuildStatus;
+	api_url: string;
+	comment?: string | null;
+	job_name?: string | null;
+	resource_name?: string | null;
+	pipeline_id?: number | null;
+	pipeline_name?: string | null;
+	pipeline_instance_vars?: AtcInstanceVars | null;
+	start_time?: number | null;
+	end_time?: number | null;
+	reap_time?: number | null;
+	rerun_number?: number | null;
+	rerun_of?: AtcRerunOfBuild | null;
+	created_by?: string | null;
+}
+
+// Based on concourse/atc/summary.go
+/**
+ * Represents a summary of a Concourse build, often embedded in other objects.
+ */
+export interface AtcBuildSummary {
+	id: number;
+	name: string;
+	status: AtcBuildStatus;
+	start_time?: number | null;
+	end_time?: number | null;
+	team_name: string;
+	pipeline_id: number;
+	pipeline_name: string;
+	pipeline_instance_vars?: AtcInstanceVars | null;
+	job_name?: string | null;
+	plan?: unknown | null; // Mapped from *json.RawMessage
+}
+
+// --- Job --- //
+
+// Based on concourse/atc/job.go
+/**
+ * Represents an input configuration for a job.
+ */
+export interface AtcJobInput {
+	name: string;
+	resource: string;
+	trigger: boolean;
+	passed?: string[] | null;
+	version?: AtcVersionConfig | null;
+}
+
+// Based on concourse/atc/job.go
+/**
+ * Represents an output configuration for a job.
+ */
+export interface AtcJobOutput {
+	name: string;
+	resource: string;
+}
+
+// Based on concourse/atc/job.go
+/**
+ * Represents a Concourse job.
+ */
+export interface AtcJob {
+	id: number;
+	name: string;
+	team_name: string;
+	pipeline_id: number;
+	pipeline_name: string;
+	pipeline_instance_vars?: AtcInstanceVars | null;
+	paused?: boolean | null;
+	paused_by?: string | null;
+	paused_at?: number | null;
+	has_new_inputs?: boolean | null;
+	groups?: string[] | null;
+	first_logged_build_id?: number | null;
+	disable_manual_trigger?: boolean | null;
+	next_build: AtcBuild | null;
+	finished_build: AtcBuild | null;
+	transition_build?: AtcBuild | null;
+	inputs?: AtcJobInput[] | null;
+	outputs?: AtcJobOutput[] | null;
+}
+
+// --- Resource & Resource Config --- //
+
+// Based on concourse/atc/build_inputs_outputs.go
+/**
+ * Represents a specific version of a resource, including metadata and enabled status.
+ */
+export interface AtcResourceVersion {
+	id: number;
+	metadata?: AtcMetadataField[] | null;
+	version: AtcVersion;
+	enabled: boolean;
+}
+
+// Based on concourse/atc/resource.go
+/**
+ * Represents a Concourse resource as returned by API endpoints (e.g., listing resources).
+ * This is distinct from the ResourceConfig used in pipeline configuration.
+ */
+export interface AtcResource {
+	name: string;
+	pipeline_id: number;
+	pipeline_name: string;
+	pipeline_instance_vars?: AtcInstanceVars | null;
+	team_name: string;
+	type: string;
+	last_checked?: number | null;
+	icon?: string | null;
+	pinned_version?: AtcVersion | null;
+	pinned_in_config?: boolean | null;
+	pin_comment?: string | null;
+	build?: AtcBuildSummary | null;
+}
+
+// Based on concourse/atc/config.go
+/**
+ * Represents the configuration of a resource within a pipeline.
+ */
+export interface AtcResourceConfig {
+	name: string;
+	old_name?: string | null;
+	public?: boolean | null;
+	webhook_token?: string | null;
+	type: string;
+	source: AtcSource;
+	check_every?: AtcCheckEvery | null;
+	check_timeout?: string | null;
+	tags?: AtcTags | null;
+	version?: AtcVersion | null;
+	icon?: string | null;
+	expose_build_created_by?: boolean | null;
+}
+
+// --- Resource Type --- //
+
+// Based on concourse/atc/config.go
+/**
+ * Represents the configuration of a custom resource type within a pipeline.
+ */
+export interface AtcResourceType {
+	name: string;
+	type: string;
+	source: AtcSource;
+	defaults?: AtcSource | null;
+	privileged?: boolean | null;
+	check_every?: AtcCheckEvery | null;
+	tags?: AtcTags | null;
+	params?: AtcParams | null;
 }
 
 // --- Worker --- //
@@ -115,16 +337,11 @@ export interface AtcPipeline {
  * Describes a resource type supported by a worker.
  */
 export interface AtcWorkerResourceType {
-	/** The name of the resource type (e.g., "git", "s3"). */
 	type: string;
-	/** The container image URL used for this resource type on the worker. */
 	image: string;
-	/** The version of the resource type implementation on the worker. */
-	version?: string;
-	/** Whether the resource type requires privileged container execution. */
-	privileged?: boolean;
-	/** Whether the resource type supports unique version history (used for locking). */
-	unique_version_history?: boolean;
+	version?: string | null;
+	privileged?: boolean | null;
+	unique_version_history?: boolean | null;
 }
 
 // Based on concourse/atc/worker.go
@@ -132,41 +349,23 @@ export interface AtcWorkerResourceType {
  * Represents a Concourse worker.
  */
 export interface AtcWorker {
-	/** The Garden address the worker is listening on. */
 	addr: string; // Mapped from GardenAddr
-	/** The Baggageclaim URL for the worker (optional). */
-	baggageclaim_url?: string;
-	/** Path to certificates directory on the worker (optional). */
-	certs_path?: string;
-	/** HTTP proxy URL configured on the worker (optional). */
-	http_proxy_url?: string;
-	/** HTTPS proxy URL configured on the worker (optional). */
-	https_proxy_url?: string;
-	/** Comma-separated list of hosts to bypass proxy for (optional). */
-	no_proxy?: string;
-	/** Number of active containers on the worker. */
+	baggageclaim_url?: string | null;
+	certs_path?: string | null;
+	http_proxy_url?: string | null;
+	https_proxy_url?: string | null;
+	no_proxy?: string | null;
 	active_containers: number;
-	/** Number of active volumes on the worker. */
 	active_volumes: number;
-	/** Number of active tasks currently assigned to the worker. */
 	active_tasks: number;
-	/** List of resource types supported by the worker. */
 	resource_types: AtcWorkerResourceType[];
-	/** The platform the worker runs on (e.g., "linux", "darwin"). */
 	platform: string;
-	/** Tags associated with the worker. */
-	tags?: AtcTags;
-	/** The name of the team the worker belongs to (if any). */
-	team?: string;
-	/** The unique name of the worker. */
+	tags?: AtcTags | null;
+	team?: string | null;
 	name: string;
-	/** The version of the Concourse binary running on the worker. */
-	version?: string;
-	/** Unix timestamp when the worker started. */
+	version?: string | null;
 	start_time: number;
-	/** Whether the worker is ephemeral. */
-	ephemeral?: boolean;
-	/** The current state of the worker (e.g., "running", "stalled"). */
+	ephemeral?: boolean | null;
 	state: string;
 }
 
@@ -177,76 +376,205 @@ export interface AtcWorker {
  * Represents basic information about a user, often used in lists.
  */
 export interface AtcUser {
-	/** Internal user ID (optional). */
-	id?: number;
-	/** Login username (optional). */
-	username?: string;
-	/** Authentication connector used (e.g., "local", "github") (optional). */
-	connector?: string;
-	/** Unix timestamp of the last login (optional). */
-	last_login?: number;
-	/** Subject claim from OIDC/OAuth token (optional). */
-	sub?: string;
+	id?: number | null;
+	username?: string | null;
+	connector?: string | null;
+	last_login?: number | null;
+	sub?: string | null;
 }
 
+// Based on concourse/atc/user.go
 /**
  * Represents detailed information about the authenticated user.
  */
 export interface AtcUserInfo {
-	/** Subject claim from OIDC/OAuth token. */
 	sub: string;
-	/** User's display name. */
 	name: string;
-	/** Connector-specific user ID. */
 	user_id: string;
-	/** Login username. */
 	user_name: string;
-	/** User's email address. */
 	email: string;
-	/** Whether the user has global admin privileges. */
 	is_admin: boolean;
-	/** Whether the user represents an internal system component. */
 	is_system: boolean;
-	/** Map of team names to the user's roles within that team (e.g., {"main": ["owner"]}). */
 	teams: Record<string, string[]>;
-	/** Authentication connector used. */
 	connector: string;
-	/** Generated display user ID string. */
 	display_user_id: string;
 }
 
-// Based on concourse/atc/config.go
-/**
- * Represents the check interval configuration (`check_every`).
- * Can be a duration string (e.g., "1m", "30s") or the literal "never".
- */
-export type AtcCheckEvery = string; // e.g., "1m", "1h", "never"
+// --- Events --- //
 
-/**
- * Represents tags associated with resources, types, or steps.
- * Based on concourse/atc/config.go (Assumption) / worker.go (Confirmation)
- */
-export type AtcTags = string[];
-
-// Based on concourse/atc/job.go
-/**
- * Represents a Concourse job.
- */
-export interface AtcJob {
-	id: number;
+// Shadow task types from concourse/atc/event/events.go TaskConfig
+export interface AtcEventTaskRunConfig {
+	path: string;
+	args?: string[];
+	dir?: string;
+}
+export interface AtcEventTaskInputConfig {
 	name: string;
-	// ... rest of AtcJob interface ...
+	path?: string;
+}
+export interface AtcEventTaskConfig {
+	platform: string;
+	image?: string;
+	run: AtcEventTaskRunConfig;
+	inputs?: AtcEventTaskInputConfig[];
 }
 
-// --- Resource & Resource Config --- //
-
-// Based on concourse/atc/resource.go
-/**
- * Represents a Concourse resource as returned by API endpoints (e.g., listing resources).
- * This is distinct from the ResourceConfig used in pipeline configuration.
- */
-export interface AtcResource {
-	name: string;
-	pipeline_id: number;
-	// ... rest of AtcResource interface ...
+// Specific Event Interfaces (Payloads within the 'data' field)
+export interface AtcEventErrorData {
+	message: string;
+	origin?: AtcOrigin | null;
+	time?: number | null;
 }
+export interface AtcEventFinishTaskData {
+	time: number;
+	exit_status: number;
+	origin?: AtcOrigin | null;
+}
+export interface AtcEventInitializeTaskData {
+	time?: number | null;
+	origin?: AtcOrigin | null;
+	config?: AtcEventTaskConfig | null;
+}
+export interface AtcEventStartTaskData {
+	time?: number | null;
+	origin?: AtcOrigin | null;
+	config?: AtcEventTaskConfig | null;
+}
+export interface AtcEventStatusData {
+	status: AtcBuildStatus;
+	time?: number | null;
+}
+export interface AtcEventWaitingForWorkerData {
+	time?: number | null;
+	origin?: AtcOrigin | null;
+}
+export interface AtcEventSelectedWorkerData {
+	time?: number | null;
+	origin?: AtcOrigin | null;
+	selected_worker?: string | null;
+}
+export interface AtcEventStreamingVolumeData {
+	time?: number | null;
+	origin?: AtcOrigin | null;
+	volume?: string | null;
+	source_worker?: string | null;
+	dest_worker?: string | null;
+}
+export interface AtcEventWaitingForStreamedVolumeData {
+	time?: number | null;
+	origin?: AtcOrigin | null;
+	volume?: string | null;
+	dest_worker?: string | null;
+}
+export interface AtcEventLogData {
+	time?: number | null;
+	origin?: AtcOrigin | null;
+	payload: string;
+}
+export interface AtcEventInitializeCheckData {
+	origin?: AtcOrigin | null;
+	time?: number | null;
+	name?: string | null;
+}
+export interface AtcEventInitializeGetData {
+	origin?: AtcOrigin | null;
+	time?: number | null;
+}
+export interface AtcEventStartGetData {
+	origin?: AtcOrigin | null;
+	time?: number | null;
+}
+export interface AtcEventFinishGetData {
+	origin?: AtcOrigin | null;
+	time: number;
+	exit_status: number;
+	version?: AtcVersion | null;
+	metadata?: AtcMetadataField[] | null;
+}
+export interface AtcEventInitializePutData {
+	origin?: AtcOrigin | null;
+	time?: number | null;
+}
+export interface AtcEventStartPutData {
+	origin?: AtcOrigin | null;
+	time?: number | null;
+}
+export interface AtcEventFinishPutData {
+	origin?: AtcOrigin | null;
+	time: number;
+	exit_status: number;
+	version?: AtcVersion | null;
+	metadata?: AtcMetadataField[] | null;
+}
+export interface AtcEventSetPipelineChangedData {
+	origin?: AtcOrigin | null;
+	changed?: boolean | null;
+}
+export interface AtcEventInitializeData {
+	origin?: AtcOrigin | null;
+	time?: number | null;
+}
+export interface AtcEventStartData {
+	origin?: AtcOrigin | null;
+	time?: number | null;
+}
+export interface AtcEventFinishData {
+	origin?: AtcOrigin | null;
+	time: number;
+	succeeded?: boolean | null;
+}
+export interface AtcEventImageCheckData {
+	time?: number | null;
+	origin?: AtcOrigin | null;
+	plan?: unknown | null;
+}
+export interface AtcEventImageGetData {
+	time?: number | null;
+	origin?: AtcOrigin | null;
+	plan?: unknown | null;
+}
+export interface AtcEventAcrossSubstepsData {
+	time?: number | null;
+	origin?: AtcOrigin | null;
+	substeps?: unknown[] | null;
+}
+
+// Base Event structure for discriminated union
+interface AtcEventBase<E extends string, D> {
+	event: E;
+	version: string;
+	data: D;
+}
+
+/**
+ * Represents any event emitted by a Concourse build stream.
+ * Use the 'event' property to discriminate between specific event types.
+ */
+export type AtcEvent =
+	| AtcEventBase<"error", AtcEventErrorData>
+	| AtcEventBase<"finish-task", AtcEventFinishTaskData>
+	| AtcEventBase<"initialize-task", AtcEventInitializeTaskData>
+	| AtcEventBase<"start-task", AtcEventStartTaskData>
+	| AtcEventBase<"status", AtcEventStatusData>
+	| AtcEventBase<"waiting-for-worker", AtcEventWaitingForWorkerData>
+	| AtcEventBase<"selected-worker", AtcEventSelectedWorkerData>
+	| AtcEventBase<"streaming-volume", AtcEventStreamingVolumeData>
+	| AtcEventBase<
+			"waiting-for-streamed-volume",
+			AtcEventWaitingForStreamedVolumeData
+	  >
+	| AtcEventBase<"log", AtcEventLogData>
+	| AtcEventBase<"initialize-check", AtcEventInitializeCheckData>
+	| AtcEventBase<"initialize-get", AtcEventInitializeGetData>
+	| AtcEventBase<"start-get", AtcEventStartGetData>
+	| AtcEventBase<"finish-get", AtcEventFinishGetData>
+	| AtcEventBase<"initialize-put", AtcEventInitializePutData>
+	| AtcEventBase<"start-put", AtcEventStartPutData>
+	| AtcEventBase<"finish-put", AtcEventFinishPutData>
+	| AtcEventBase<"set-pipeline-changed", AtcEventSetPipelineChangedData>
+	| AtcEventBase<"initialize", AtcEventInitializeData>
+	| AtcEventBase<"start", AtcEventStartData>
+	| AtcEventBase<"finish", AtcEventFinishData>
+	| AtcEventBase<"image-check", AtcEventImageCheckData>
+	| AtcEventBase<"image-get", AtcEventImageGetData>
+	| AtcEventBase<"across-substeps", AtcEventAcrossSubstepsData>;
