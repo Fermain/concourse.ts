@@ -121,6 +121,20 @@ export const AtcJobOutputSchema = z.object({
 	resource: z.string(),
 });
 
+// Add AtcJobConfigSchema (Based on Go atc.JobConfig)
+export const AtcJobConfigSchema = z.object({
+	name: z.string(),
+	old_name: z.string().optional(),
+	public: z.boolean().optional(),
+	disable_manual_trigger: z.boolean().optional(),
+	interruptible: z.boolean().optional(),
+	serial: z.boolean().optional(),
+	serial_groups: z.array(z.string()).optional(),
+	build_log_retention: z.unknown().optional(), // Complex type, define later if needed
+	build_logs_to_retain: z.number().optional(),
+	plan: z.array(z.unknown()), // Complex Plan sequence, define later if needed
+});
+
 // Using z.lazy to handle potential recursion (Job -> Build -> Job?)
 export const AtcJobSchema = z.lazy(() =>
 	z.object({
@@ -257,12 +271,15 @@ export const AtcWorkerArraySchema = z.array(AtcWorkerSchema);
 // --- User --- //
 
 export const AtcUserSchema = z.object({
-	id: z.number().optional(),
-	username: z.string().optional(),
-	connector: z.string().optional(),
-	last_login: z.number().optional(),
-	sub: z.string().optional(),
+	id: z.number().nullish(),
+	username: z.string().nullish(),
+	connector: z.string().nullish(),
+	last_login: z.number().nullish(),
+	sub: z.string().nullish(),
 });
+
+// Add the array schema
+export const AtcUserArraySchema = z.array(AtcUserSchema);
 
 export const AtcUserInfoSchema = z.object({
 	sub: z.string(),
@@ -545,6 +562,18 @@ export const AtcEventSchema = z.discriminatedUnion("event", [
 export const AtcCheckRequestBodySchema = z.object({
 	from: AtcVersionSchema.optional(), // Corresponds to `atc.Version` in Go client
 });
+
+// Add AtcConfigSchema (Based on Go atc.Config)
+export const AtcConfigSchema = z.object({
+	groups: z.array(AtcGroupConfigSchema).optional(),
+	resources: z.array(AtcResourceConfigSchema).optional(),
+	resource_types: z.array(AtcResourceTypeSchema).optional(),
+	jobs: z.array(AtcJobConfigSchema).optional(), // Use the newly defined JobConfig schema
+	display: AtcDisplayConfigSchema.optional(),
+});
+
+// Add Build Array Schema
+export const AtcBuildArraySchema = z.array(AtcBuildSchema);
 
 // Ensure other array schema exports are present (Redundant if already there, but safe)
 // export const AtcTeamArraySchema = z.array(AtcTeamSchema);

@@ -28,7 +28,8 @@ import type {
 	AtcWorkerResourceTypeSchema,
 	AtcUserSchema,
 	AtcUserInfoSchema,
-	AtcOriginSchema
+	AtcOriginSchema,
+	AtcConfigSchema
 } from './atc.schemas';
 
 // --- Primitives / Base Types --- //
@@ -185,6 +186,12 @@ export type AtcDisplayConfig = z.infer<typeof AtcDisplayConfigSchema>;
 // 	last_updated?: number | null;
 // }
 export type AtcPipeline = z.infer<typeof AtcPipelineSchema>;
+
+/**
+ * Represents the full configuration of a pipeline, including groups, resources, types, and jobs.
+ * Based on Go atc.Config
+ */
+export type AtcConfig = z.infer<typeof AtcConfigSchema>;
 
 // --- Build --- //
 
@@ -582,3 +589,15 @@ export type AtcEvent =
 	| AtcEventBase<"image-check", AtcEventImageCheckData>
 	| AtcEventBase<"image-get", AtcEventImageGetData>
 	| AtcEventBase<"across-substeps", AtcEventAcrossSubstepsData>;
+
+/**
+ * Represents pagination parameters for API list endpoints.
+ */
+export interface Page {
+	/** The maximum number of results to return. */
+	limit?: number;
+	/** Return results created since this timestamp (exclusive). */
+	since?: number;
+	/** Return results created until this timestamp (exclusive). */
+	until?: number;
+}
