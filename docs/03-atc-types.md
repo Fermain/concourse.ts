@@ -26,6 +26,7 @@ This document outlines the plan for defining TypeScript interfaces corresponding
     - [x] `AtcBuild`, `AtcBuildStatus`, `AtcRerunOfBuild`, `AtcBuildSummary` (`build.go`, `summary.go`)
     - [x] `AtcResource`, `AtcResourceConfig`, `AtcSource`, `AtcCheckEvery`, `AtcTags` (`resource.go`, `config.go`, `resource_types.go`)
     - [x] `AtcResourceType`, `AtcParams` (`config.go`, `resource_types.go`)
+    - [x] `AtcResourceVersion`, `AtcMetadataField` (`build_inputs_outputs.go`, `resource_types.go`)
     - [x] `AtcWorker`, `AtcWorkerResourceType` (`worker.go`)
     - [x] `AtcUser`, `AtcUserInfo` (`user.go`)
     - [x] `AtcEvent` (discriminated union), `AtcOrigin`, `AtcMetadataField`, etc. (`event/events.go`, `event/types.go`, `resource_types.go`)
@@ -33,4 +34,5 @@ This document outlines the plan for defining TypeScript interfaces corresponding
 - [ ] Use utility types like `Partial<>` or optional properties (`?`) for optional fields (done where identified).
 - [ ] Add TSDoc comments to interfaces and properties (done for most).
 - [ ] Consider using a tool or script to aid in the initial generation (skipped for now).
-- [x] Started creating corresponding Zod schemas in `src/types/atc.schemas.ts`. 
+- [x] Started creating corresponding Zod schemas in `src/types/atc.schemas.ts`.
+- [x] Created corresponding Zod schemas in `src/types/atc.schemas.ts` for most types defined above. 

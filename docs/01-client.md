@@ -22,8 +22,10 @@ This document outlines the plan for the core `ConcourseClient` class.
 ## TypeScript Implementation Plan
 
 - [x] Review `client.ts` structure.
-- [ ] Refine `request` method for robust API error handling and response type handling (beyond JSON).
+- [x] Refine `request` method for robust API error handling (throws `ConcourseApiError`).
+- [x] Refine `parseResponse` for validation errors (throws `ConcourseValidationError`).
+- [ ] Refine `request` method for non-JSON responses/errors.
 - [x] Use Zod schemas for validating and parsing responses (via `parseResponse` helper).
 - [ ] Implement request/response logging (potentially using a dedicated logger).
 - [ ] Investigate Go client's internal connection/HTTP agent details (Low priority).
-- [ ] Define common API error types. 
+- [x] Define common error types (`ConcourseError`, `ConcourseApiError`, `ConcourseValidationError`) in `src/errors.ts`. 
