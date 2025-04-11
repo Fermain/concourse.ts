@@ -48,8 +48,12 @@ import {
 interface ConcourseClientOptions {
 	/** The base URL of the Concourse ATC API (e.g., "http://localhost:8080"). */
 	baseUrl: string;
-	/** Optional bearer token for authentication. */
+	/** Optional bearer token for authentication. Mutually exclusive with username/password. */
 	token?: string;
+	/** Optional username for Basic Authentication. Must be provided with password. Mutually exclusive with token. */
+	username?: string;
+	/** Optional password for Basic Authentication. Must be provided with username. Mutually exclusive with token. */
+	password?: string;
 }
 
 /**
@@ -68,18 +72,50 @@ export class ConcourseError extends Error {
 
 /**
  * A TypeScript client for interacting with the Concourse ATC API.
+ * Supports authentication via Bearer Token (provide `token`) or Basic Authentication (provide `username` and `password`).
+ * If no authentication details are provided, requests will be made without an Authorization header.
  */
 export class ConcourseClient {
 	private readonly baseUrl: string;
 	private readonly token?: string;
+	private readonly username?: string;
+	private readonly password?: string;
+	private readonly authMethod: 'token' | 'basic' | 'none';
 
 	constructor(options: ConcourseClientOptions) {
 		if (!options.baseUrl) {
 			throw new Error('Concourse API base URL is required.');
 		}
-		// Remove trailing slash if present
 		this.baseUrl = options.baseUrl.replace(/\/$/, '');
-		this.token = options.token;
+
+		// Validate and store authentication details
+		const hasToken = !!options.token;
+		const hasBasic = !!options.username && !!options.password;
+
+		if (hasToken && hasBasic) {
+			throw new Error('Provide either token or username/password for authentication, not both.');
+		} else if (hasToken) {
+			this.token = options.token;
+			this.authMethod = 'token';
+		} else if (hasBasic) {
+			this.username = options.username;
+			this.password = options.password;
+			this.authMethod = 'basic';
+		} else {
+			// Allow no auth for potentially public endpoints
+			this.authMethod = 'none';
+		}
+
+		// Warn if only one of username/password is provided
+		if (!!options.username !== !!options.password) {
+			console.warn('Both username and password must be provided for Basic Authentication. Proceeding without authentication.');
+			// Reset basic auth attempt if incomplete
+			if (this.authMethod === 'basic') {
+				this.username = undefined;
+				this.password = undefined;
+				this.authMethod = 'none';
+			}
+		}
 	}
 
 	/**
@@ -99,9 +135,14 @@ export class ConcourseClient {
 		const url = `${this.baseUrl}${path}`;
 		const headers = new Headers(options.headers);
 
-		if (this.token) {
+		// Add Authorization header based on configured method
+		if (this.authMethod === 'token' && this.token) {
 			headers.set('Authorization', `Bearer ${this.token}`);
+		} else if (this.authMethod === 'basic' && this.username && this.password) {
+			const credentials = btoa(`${this.username}:${this.password}`);
+			headers.set('Authorization', `Basic ${credentials}`);
 		}
+
 		headers.set('Accept', 'application/json');
 		if (options.method === 'POST' || options.method === 'PUT' || options.method === 'PATCH') {
 			if (!headers.has('Content-Type')) {
