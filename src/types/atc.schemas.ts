@@ -17,6 +17,11 @@ export const AtcSourceSchema = z.record(z.unknown()); // From resource_types.go
 export const AtcParamsSchema = z.record(z.unknown()); // From resource_types.go
 export const AtcCheckEverySchema = z.string(); // From config.go, e.g., "1m", "never"
 export const AtcTagsSchema = z.array(z.string()); // From worker.go / config.go
+export const AtcOriginSourceSchema = z.enum(["stdout", "stderr"]);
+export const AtcOriginSchema = z.object({
+	id: z.string().nullish(),
+	source: AtcOriginSourceSchema.nullish(),
+});
 export const AtcMetadataFieldSchema = z.object({
 	// From resource_types.go
 	name: z.string(),
@@ -158,6 +163,17 @@ export const AtcBuildSummarySchema = z.object({
 	plan: z.unknown().optional(), // Mapped from *json.RawMessage
 });
 
+// Added: Schema for Resource Version
+export const AtcResourceVersionSchema = z.object({
+	id: z.number(),
+	metadata: z.array(AtcMetadataFieldSchema).nullish(), // Optional array of metadata
+	version: AtcVersionSchema, // The core version object
+	enabled: z.boolean(),
+});
+
+// Ensure array schema is exported
+export const AtcResourceVersionArraySchema = z.array(AtcResourceVersionSchema);
+
 export const AtcResourceSchema = z.object({
 	name: z.string(),
 	pipeline_id: z.number(),
@@ -262,13 +278,6 @@ export const AtcUserInfoSchema = z.object({
 });
 
 // --- Events --- //
-
-export const AtcOriginSourceSchema = z.enum(["stdout", "stderr"]);
-
-export const AtcOriginSchema = z.object({
-	id: z.string().optional(),
-	source: AtcOriginSourceSchema.optional(),
-});
 
 export const AtcEventTaskRunConfigSchema = z.object({
 	path: z.string(),
@@ -532,12 +541,16 @@ export const AtcEventSchema = z.discriminatedUnion("event", [
 	}),
 ]);
 
-/**
- * Schema for the request body of the check resource endpoint (optional).
- */
+// Added: Schema for the request body of the check resource endpoint (optional).
 export const AtcCheckRequestBodySchema = z.object({
 	from: AtcVersionSchema.optional(), // Corresponds to `atc.Version` in Go client
 });
 
-// Ensure array schema exports
-export const AtcResourceVersionArraySchema = z.array(AtcResourceVersionSchema);
+// Ensure other array schema exports are present (Redundant if already there, but safe)
+// export const AtcTeamArraySchema = z.array(AtcTeamSchema);
+// export const AtcPipelineArraySchema = z.array(AtcPipelineSchema);
+// export const AtcJobArraySchema = z.array(AtcJobSchema);
+// export const AtcResourceArraySchema = z.array(AtcResourceSchema);
+// export const AtcResourceTypeArraySchema = z.array(AtcResourceTypeSchema);
+// export const AtcWorkerArraySchema = z.array(AtcWorkerSchema);
+// export const AtcUserArraySchema = z.array(AtcUserSchema); // Still needs AtcUserSchema potentially defined first

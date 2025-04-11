@@ -14,6 +14,9 @@ import type {
 	AtcUserInfo,
 	AtcVersion,
 	AtcWorker,
+	AtcConfig,
+	Page,
+	AtcBuild,
 } from "./types/atc"; // Restore all type imports
 import {
 	AtcBuildSummarySchema,
@@ -28,298 +31,305 @@ import {
 	AtcUserInfoSchema, // Needed for getUserInfo
 	AtcUserSchema, // Needed for listActiveUsersSince
 	AtcWorkerArraySchema,
+	AtcUserArraySchema, // Added for listActiveUsersSince
+	AtcConfigSchema,
+	AtcBuildSchema,
+	AtcBuildArraySchema,
+	AtcJobSchema, // Added Job schema
 } from "./types/atc.schemas"; // Import Zod schemas
 
 // Placeholder for ATC types - we will define these properly later
 // AtcPipeline removed, imported specifically
 // AtcTeam and AtcInfo now imported as types
 
-// Define Pagination types (could move to a separate types file later)
-export interface Page {
-	limit?: number;
-	since?: number; // Corresponds to ResourceVersion ID
-	until?: number; // Corresponds to ResourceVersion ID
+/**
+ * Configuration options for the ConcourseClient.
+ */
+interface ConcourseClientOptions {
+	/** The base URL of the Concourse ATC API (e.g., "http://localhost:8080"). */
+	baseUrl: string;
+	/** Optional bearer token for authentication. */
+	token?: string;
 }
 
-export class ConcourseClient {
-	private apiUrl: string;
-	private token: string | null = null; // Store the bearer token
+/**
+ * Error thrown when API requests fail or validation errors occur.
+ */
+export class ConcourseError extends Error {
+	constructor(
+		message: string,
+		public readonly response?: Response,
+		public readonly cause?: unknown,
+	) {
+		super(message);
+		this.name = 'ConcourseError';
+	}
+}
 
-	constructor(apiUrl: string) {
-		// Ensure apiUrl doesn't end with a slash
-		this.apiUrl = apiUrl.endsWith("/") ? apiUrl.slice(0, -1) : apiUrl;
+/**
+ * A TypeScript client for interacting with the Concourse ATC API.
+ */
+export class ConcourseClient {
+	private readonly baseUrl: string;
+	private readonly token?: string;
+
+	constructor(options: ConcourseClientOptions) {
+		if (!options.baseUrl) {
+			throw new Error('Concourse API base URL is required.');
+		}
+		// Remove trailing slash if present
+		this.baseUrl = options.baseUrl.replace(/\/$/, '');
+		this.token = options.token;
 	}
 
 	/**
-	 * Sets the bearer token to use for subsequent API requests.
-	 * Pass null to clear the token.
-	 * @param token The bearer token string, or null to remove authentication.
+	 * Makes an authenticated request to the Concourse API, validates the response, and returns typed data.
+	 *
+	 * @param path The API endpoint path (e.g., "/api/v1/info").
+	 * @param schema The Zod schema to validate the response against.
+	 * @param options Optional fetch options.
+	 * @returns The validated data conforming to the schema.
+	 * @throws {ConcourseError} If the request fails or validation fails.
 	 */
-	public setToken(token: string | null): void {
-		this.token = token;
-	}
-
-	// Basic fetch wrapper - enhanced for API error handling
-	private async request(
+	private async request<T extends z.ZodTypeAny>(
 		path: string,
+		schema: T,
 		options: RequestInit = {},
-	): Promise<Response> {
-		const url = `${this.apiUrl}/api/v1${path}`;
-		const defaultHeaders: HeadersInit = {
-			"Content-Type": "application/json",
-			// Add Authorization header if token exists
-			...(this.token && { Authorization: `Bearer ${this.token}` }),
-		};
+	): Promise<z.infer<T>> {
+		const url = `${this.baseUrl}${path}`;
+		const headers = new Headers(options.headers);
 
-		// Merge existing headers from options with default headers
-		// Ensure options.headers doesn't overwrite the Authorization header if set
-		const mergedHeaders = new Headers(defaultHeaders); // Start with defaults (including Authorization)
-		if (options.headers) {
-			new Headers(options.headers).forEach((value, key) => {
-				// Only add if not Authorization or if Authorization wasn't already set by token
-				if (key.toLowerCase() !== "authorization" || !this.token) {
-					mergedHeaders.set(key, value);
-				}
+		if (this.token) {
+			headers.set('Authorization', `Bearer ${this.token}`);
+		}
+		headers.set('Accept', 'application/json');
+		if (options.method === 'POST' || options.method === 'PUT' || options.method === 'PATCH') {
+			if (!headers.has('Content-Type')) {
+				headers.set('Content-Type', 'application/json');
+			}
+		}
+
+		try {
+			const response = await fetch(url, {
+				...options,
+				headers,
 			});
-		}
 
-		const mergedOptions: RequestInit = {
-			...options,
-			headers: mergedHeaders,
-		};
+			if (!response.ok) {
+				let errorBody = 'Unknown error';
+				try {
+					errorBody = await response.text();
+				} catch (e) { /* Ignore */ }
+				throw new ConcourseError(
+					`API request failed: ${response.status} ${response.statusText} - ${errorBody}`,
+					response,
+				);
+			}
 
-		const response = await fetch(url, mergedOptions);
-
-		if (!response.ok) {
-			let responseBody = "";
-			let apiErrors: string[] = [];
-			try {
-				responseBody = await response.text();
-				// Attempt to parse standard Concourse error format
-				const errorJson = JSON.parse(responseBody);
-				if (Array.isArray(errorJson?.errors)) {
-					apiErrors = errorJson.errors.filter(
-						(e: unknown) => typeof e === "string",
-					) as string[];
+			// Handle empty response body for success codes like 204
+			if (response.status === 204 || response.headers.get('Content-Length') === '0') {
+				// Check if the schema is null, void, or undefined
+				if (
+					schema instanceof z.ZodNull ||
+					schema instanceof z.ZodVoid ||
+					schema instanceof z.ZodUndefined
+				) {
+					// Use safeParse for potentially undefined/null values
+					const validationResult = schema.safeParse(undefined);
+					if (!validationResult.success) {
+                        // This should theoretically not happen if the schema is void/null/undefined
+                        throw new ConcourseError('Failed to parse expected empty response', response, validationResult.error);
+                    }
+					return validationResult.data;
 				}
-			} catch (e) {
-				// Ignore errors during error parsing (e.g., non-JSON response)
+                // If the schema was not null/void/undefined, throw because the empty response is unexpected.
+				throw new ConcourseError('API returned unexpected empty response for non-empty schema', response);
 			}
 
-			const errorMessage =
-				apiErrors.length > 0
-					? `Concourse API Error (${response.status}): ${apiErrors.join(", ")}`
-					: `Concourse API Error: ${response.status} ${response.statusText}`;
+			const data = await response.json();
+			const validationResult = schema.safeParse(data);
 
-			throw new ConcourseApiError(
-				errorMessage,
-				response.status,
-				response.statusText,
-				apiErrors,
-				responseBody,
-			);
-		}
-
-		return response;
-	}
-
-	// Helper to parse response JSON with a Zod schema
-	private async parseResponse<T>(
-		response: Response,
-		schema: z.ZodType<T>,
-	): Promise<T> {
-		let json: unknown;
-		try {
-			json = await response.json();
-		} catch (error) {
-			// Handle cases where response is not valid JSON
-			if (error instanceof SyntaxError) {
-				console.error("Failed to parse JSON response:", error);
-				// Wrap SyntaxError in our custom validation error
-				throw new ConcourseValidationError(
-					"Invalid JSON received from API.",
-					error,
+			if (!validationResult.success) {
+				console.error("Zod Validation Error:", validationResult.error.errors);
+				throw new ConcourseError(
+					`API response validation failed: ${validationResult.error.message}`,
+					response,
+					validationResult.error,
 				);
 			}
-			// Rethrow other unexpected JSON parsing errors
-			throw error; // Or wrap in a generic ConcourseError?
-		}
 
-		try {
-			return schema.parse(json); // Validate and parse
+			return validationResult.data;
 		} catch (error) {
-			if (error instanceof z.ZodError) {
-				// Re-throw Zod errors wrapped in our custom validation error
-				console.error("Zod validation failed:", error.errors);
-				throw new ConcourseValidationError(
-					`API response validation failed: ${error.message}`,
-					error,
-				);
+			if (error instanceof ConcourseError) {
+				throw error; // Re-throw known errors
 			}
-			// Rethrow other unexpected validation errors
-			console.error("Unexpected error during Zod parsing:", error);
-			// Wrap in our custom validation error
-			const cause = error instanceof Error ? error : undefined;
-			throw new ConcourseValidationError(
-				"Unexpected error processing API response.",
-				cause,
+			throw new ConcourseError(
+				`Network or unexpected error during API request to ${url}: ${error instanceof Error ? error.message : String(error)}`,
+				undefined, // No response object available here
+				error,
 			);
 		}
 	}
 
-	// --- Authentication ---
-	// TODO: Implement different authentication methods (basic auth, OIDC)
+	// --- API Methods --- //
 
-	// --- Info ---
+	/**
+	 * Fetches general information about the Concourse ATC.
+	 * Corresponds to GET /api/v1/info
+	 *
+	 * @returns {Promise<AtcInfo>} Information about the ATC version, worker version, etc.
+	 */
 	async getInfo(): Promise<AtcInfo> {
-		const response = await this.request("/info");
-		return this.parseResponse(response, AtcInfoSchema); // Use parseResponse helper
+		return this.request('/api/v1/info', AtcInfoSchema);
 	}
 
 	// --- Pipelines ---
 	async listPipelines(): Promise<AtcPipeline[]> {
-		const response = await this.request("/pipelines");
-		return this.parseResponse(response, AtcPipelineArraySchema); // Use parseResponse helper
+		return this.request("/api/v1/pipelines", AtcPipelineArraySchema);
+	}
+
+	/**
+	 * Fetches the configuration for a specific pipeline.
+	 * GET /api/v1/teams/{teamName}/pipelines/{pipelineName}/config
+	 */
+	async getPipelineConfig(
+		teamName: string,
+		pipelineName: string,
+	): Promise<AtcConfig> {
+		const path = `/api/v1/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/config`;
+		return this.request(path, AtcConfigSchema);
 	}
 
 	// --- Teams ---
 	async listTeams(): Promise<AtcTeam[]> {
-		const response = await this.request("/teams");
-		return this.parseResponse(response, AtcTeamArraySchema); // Use parseResponse helper
+		return this.request("/api/v1/teams", AtcTeamArraySchema);
 	}
 
 	// --- Jobs ---
 	async listAllJobs(): Promise<AtcJob[]> {
-		const response = await this.request("/jobs");
-		return this.parseResponse(response, AtcJobArraySchema); // Use Zod schema for parsing
+		return this.request("/api/v1/jobs", AtcJobArraySchema);
+	}
+
+	/**
+	 * Fetches details for a specific job within a pipeline.
+	 * GET /api/v1/teams/{teamName}/pipelines/{pipelineName}/jobs/{jobName}
+	 */
+	async getJob(
+		teamName: string,
+		pipelineName: string,
+		jobName: string,
+	): Promise<AtcJob> {
+		const path = `/api/v1/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/jobs/${encodeURIComponent(jobName)}`;
+		return this.request(path, AtcJobSchema);
+	}
+
+	/**
+	 * Lists builds for a specific job within a pipeline.
+	 * GET /api/v1/teams/{teamName}/pipelines/{pipelineName}/jobs/{jobName}/builds
+	 */
+	async listJobBuilds(
+		teamName: string,
+		pipelineName: string,
+		jobName: string,
+		page?: Page,
+	): Promise<AtcBuild[]> {
+		const params = new URLSearchParams();
+		if (page?.limit) params.set("limit", String(page.limit));
+		if (page?.since) params.set("since", String(page.since));
+		if (page?.until) params.set("until", String(page.until));
+		const query = params.toString() ? `?${params.toString()}` : "";
+		const path = `/api/v1/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/jobs/${encodeURIComponent(jobName)}/builds${query}`;
+		// TODO: Handle Link header for pagination
+		return this.request(path, AtcBuildArraySchema);
+	}
+
+	// --- Builds --- //
+	/**
+	 * Fetches details for a specific build by its ID.
+	 * GET /api/v1/builds/{buildId}
+	 */
+	async getBuild(buildId: string | number): Promise<AtcBuild> {
+		const path = `/api/v1/builds/${buildId}`;
+		return this.request(path, AtcBuildSchema);
+	}
+
+	async triggerJobBuild(
+		teamName: string,
+		pipelineName: string,
+		jobName: string,
+	): Promise<AtcBuildSummary> {
+		const path = `/api/v1/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/jobs/${encodeURIComponent(jobName)}/builds`;
+		const options: RequestInit = { method: "POST" };
+		return this.request(path, AtcBuildSummarySchema, options);
 	}
 
 	// --- Workers ---
 	async listWorkers(): Promise<AtcWorker[]> {
-		const response = await this.request("/workers");
-		return this.parseResponse(response, AtcWorkerArraySchema);
+		return this.request("/api/v1/workers", AtcWorkerArraySchema);
 	}
 
 	// --- Users ---
 	async getUserInfo(): Promise<AtcUserInfo> {
-		// Use AtcUserInfo
 		console.warn("Method getUserInfo not fully implemented yet.");
-		const response = await this.request("/user");
-		return this.parseResponse(response, AtcUserInfoSchema);
+		return this.request("/api/v1/user", AtcUserInfoSchema);
 	}
 
 	async listActiveUsersSince(since: Date): Promise<AtcUser[]> {
-		// Use AtcUser[]
 		console.warn("Method listActiveUsersSince not fully implemented yet.");
 		const params = new URLSearchParams({ since: since.toISOString() });
-		const response = await this.request(`/users?${params.toString()}`);
-		// TODO: Define AtcUserArraySchema
-		// return this.parseResponse(response, AtcUserArraySchema);
-		return await response.json(); // Keep as temp
+		const path = `/api/v1/users?${params.toString()}`;
+		return this.request(path, AtcUserArraySchema);
 	}
 
 	// --- Resources ---
-	/**
-	 * Lists resources within a specific pipeline.
-	 * GET /api/v1/teams/{teamName}/pipelines/{pipelineName}/resources
-	 *
-	 * @param teamName The name of the team.
-	 * @param pipelineName The name of the pipeline.
-	 * @returns A promise resolving to an array of resources.
-	 */
-	async listResources(
+	async listResourcesForPipeline(
 		teamName: string,
 		pipelineName: string,
 	): Promise<AtcResource[]> {
-		// Use AtcResource[]
-		const path = `/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resources`;
-		const response = await this.request(path);
-		return this.parseResponse(response, AtcResourceArraySchema);
+		const path = `/api/v1/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resources`;
+		return this.request(path, AtcResourceArraySchema);
 	}
 
-	/**
-	 * Lists custom resource types configured within a specific pipeline.
-	 * GET /api/v1/teams/{teamName}/pipelines/{pipelineName}/resource-types
-	 *
-	 * @param teamName The name of the team.
-	 * @param pipelineName The name of the pipeline.
-	 * @returns A promise resolving to an array of resource types.
-	 */
-	async listResourceTypes(
+	async listResourceTypesForPipeline(
 		teamName: string,
 		pipelineName: string,
 	): Promise<AtcResourceType[]> {
-		// Use AtcResourceType[]
-		const path = `/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resource-types`;
-		const response = await this.request(path);
-		return this.parseResponse(response, AtcResourceTypeArraySchema);
+		const path = `/api/v1/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resource-types`;
+		return this.request(path, AtcResourceTypeArraySchema);
 	}
 
-	/**
-	 * Gets details for a specific resource within a pipeline.
-	 * GET /api/v1/teams/{teamName}/pipelines/{pipelineName}/resources/{resourceName}
-	 *
-	 * @param teamName The name of the team.
-	 * @param pipelineName The name of the pipeline.
-	 * @param resourceName The name of the resource.
-	 * @returns A promise resolving to the resource details.
-	 */
 	async getResource(
 		teamName: string,
 		pipelineName: string,
 		resourceName: string,
 	): Promise<AtcResource> {
-		// Use AtcResource
-		const path = `/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resources/${encodeURIComponent(resourceName)}`;
-		const response = await this.request(path);
-		return this.parseResponse(response, AtcResourceSchema);
+		const path = `/api/v1/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resources/${encodeURIComponent(resourceName)}`;
+		return this.request(path, AtcResourceSchema);
 	}
 
-	/**
-	 * Lists versions of a specific resource within a pipeline.
-	 * GET /api/v1/teams/{teamName}/pipelines/{pipelineName}/resources/{resourceName}/versions
-	 *
-	 * @param teamName The name of the team.
-	 * @param pipelineName The name of the pipeline.
-	 * @param resourceName The name of the resource.
-	 * @param page Optional pagination parameters (limit, since, until).
-	 * @returns A promise resolving to an array of resource versions.
-	 */
 	async listResourceVersions(
 		teamName: string,
 		pipelineName: string,
 		resourceName: string,
-		page?: Page,
+		limit?: number,
+		since?: number,
+		until?: number,
 	): Promise<AtcResourceVersion[]> {
-		// Use AtcResourceVersion[]
-		const path = `/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resources/${encodeURIComponent(resourceName)}/versions`;
 		const params = new URLSearchParams();
-		if (page?.limit) params.set("limit", String(page.limit));
-		if (page?.since) params.set("since", String(page.since));
-		if (page?.until) params.set("until", String(page.until));
-		const fullPath = params.toString() ? `${path}?${params.toString()}` : path;
-		const response = await this.request(fullPath);
-		// TODO: Handle pagination headers
-		return this.parseResponse(response, AtcResourceVersionArraySchema);
+		if (limit) params.set("limit", String(limit));
+		if (since) params.set("since", String(since));
+		if (until) params.set("until", String(until));
+		const query = params.toString() ? `?${params.toString()}` : "";
+		const fullPath = `/api/v1/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resources/${encodeURIComponent(resourceName)}/versions${query}`;
+		return this.request(fullPath, AtcResourceVersionArraySchema);
 	}
 
-	/**
-	 * Triggers a check for new versions of a resource.
-	 * POST /api/v1/teams/{teamName}/pipelines/{pipelineName}/resources/{resourceName}/check
-	 *
-	 * @param teamName The name of the team.
-	 * @param pipelineName The name of the pipeline.
-	 * @param resourceName The name of the resource.
-	 * @param version Optional specific version to check from (type `Record<string, string>`).
-	 * @returns A promise resolving to the build summary for the check build.
-	 */
 	async checkResource(
 		teamName: string,
 		pipelineName: string,
 		resourceName: string,
-		version?: AtcVersion, // Use AtcVersion again
+		version?: AtcVersion,
 	): Promise<AtcBuildSummary> {
-		// Use AtcBuildSummary
 		const path = `/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resources/${encodeURIComponent(resourceName)}/check`;
 		const options: RequestInit = { method: "POST" };
 		if (version) {
@@ -329,12 +339,6 @@ export class ConcourseClient {
 			headers.set("Content-Type", "application/json");
 			options.headers = headers;
 		}
-		const response = await this.request(path, options);
-		return this.parseResponse(response, AtcBuildSummarySchema);
+		return this.request(path, AtcBuildSummarySchema, options);
 	}
-
-	// --- Other methods based on Go Client Interface ---
-	// TODO: Add methods for Builds, Resources, etc.
-	// Example:
-	// async getBuild(buildId: string): Promise<AtcBuild> { ... }
 }

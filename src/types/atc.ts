@@ -3,6 +3,34 @@
 // Based on Go structs in concourse/atc/*
 // ========================================
 
+// Use import type for schema imports used only in z.infer
+import type { z } from 'zod';
+// Use import type for schema imports used only in z.infer
+import type {
+	AtcMetadataFieldSchema,
+	AtcTeamSchema,
+	// Add imports for other schemas to be inferred
+	AtcInfoSchema,
+	AtcPipelineSchema,
+	AtcGroupConfigSchema,
+	AtcDisplayConfigSchema,
+	AtcBuildSchema,
+	AtcRerunOfBuildSchema,
+	AtcBuildSummarySchema,
+	AtcJobSchema,
+	AtcJobInputSchema,
+	AtcJobOutputSchema,
+	AtcResourceVersionSchema,
+	AtcResourceSchema,
+	AtcResourceConfigSchema,
+	AtcResourceTypeSchema,
+	AtcWorkerSchema,
+	AtcWorkerResourceTypeSchema,
+	AtcUserSchema,
+	AtcUserInfoSchema,
+	AtcOriginSchema
+} from './atc.schemas';
+
 // --- Primitives / Base Types --- //
 
 /**
@@ -40,10 +68,7 @@ export type AtcBuildStatus =
  * Represents a metadata field associated with a resource version.
  * Based on concourse/atc/resource_types.go
  */
-export interface AtcMetadataField {
-	name: string;
-	value: string;
-}
+export type AtcMetadataField = z.infer<typeof AtcMetadataFieldSchema>;
 
 /**
  * Represents the source configuration for a resource or resource type.
@@ -82,10 +107,11 @@ export type AtcOriginSource = "stdout" | "stderr";
  * Represents the origin of an event within the build plan (e.g., a specific step).
  * Based on concourse/atc/event/events.go
  */
-export interface AtcOrigin {
-	id?: string | null;
-	source?: AtcOriginSource | null;
-}
+// export interface AtcOrigin {
+// 	id?: string | null;
+// 	source?: AtcOriginSource | null;
+// }
+export type AtcOrigin = z.infer<typeof AtcOriginSchema>;
 
 // --- Info --- //
 // Based on concourse/atc/info.go
@@ -93,13 +119,14 @@ export interface AtcOrigin {
 /**
  * Represents the information returned by the Concourse /api/v1/info endpoint.
  */
-export interface AtcInfo {
-	version: string;
-	worker_version: string;
-	feature_flags: Record<string, boolean>;
-	external_url?: string | null;
-	cluster_name?: string | null;
-}
+// export interface AtcInfo {
+// 	version: string;
+// 	worker_version: string;
+// 	feature_flags: Record<string, boolean>;
+// 	external_url?: string | null;
+// 	cluster_name?: string | null;
+// }
+export type AtcInfo = z.infer<typeof AtcInfoSchema>;
 
 // --- Team --- //
 // Based on concourse/atc/team.go
@@ -112,11 +139,7 @@ export type AtcTeamAuth = Record<string, Record<string, string[]>>;
 /**
  * Represents a Concourse team.
  */
-export interface AtcTeam {
-	id?: number | null;
-	name?: string | null;
-	auth?: AtcTeamAuth | null;
-}
+export type AtcTeam = z.infer<typeof AtcTeamSchema>;
 
 // --- Pipeline & Config --- //
 
@@ -124,41 +147,44 @@ export interface AtcTeam {
 /**
  * Configuration for a pipeline group in the UI.
  */
-export interface AtcGroupConfig {
-	name: string;
-	jobs?: string[] | null;
-	resources?: string[] | null;
-}
+// export interface AtcGroupConfig {
+// 	name: string;
+// 	jobs?: string[] | null;
+// 	resources?: string[] | null;
+// }
+export type AtcGroupConfig = z.infer<typeof AtcGroupConfigSchema>;
 
 // Based on concourse/atc/config.go
 /**
  * Configuration for the pipeline's visual appearance in the UI.
  */
-export interface AtcDisplayConfig {
-	background_image?: string | null;
-	background_filter?: string | null;
-}
+// export interface AtcDisplayConfig {
+// 	background_image?: string | null;
+// 	background_filter?: string | null;
+// }
+export type AtcDisplayConfig = z.infer<typeof AtcDisplayConfigSchema>;
 
 // Based on concourse/atc/pipeline.go
 /**
  * Represents a Concourse pipeline.
  */
-export interface AtcPipeline {
-	id: number;
-	name: string;
-	instance_vars?: AtcInstanceVars | null;
-	paused: boolean;
-	paused_by?: string | null;
-	paused_at?: number | null;
-	public: boolean;
-	archived: boolean;
-	groups?: AtcGroupConfig[] | null;
-	team_name: string;
-	display?: AtcDisplayConfig | null;
-	parent_build_id?: number | null;
-	parent_job_id?: number | null;
-	last_updated?: number | null;
-}
+// export interface AtcPipeline {
+// 	id: number;
+// 	name: string;
+// 	instance_vars?: AtcInstanceVars | null;
+// 	paused: boolean;
+// 	paused_by?: string | null;
+// 	paused_at?: number | null;
+// 	public: boolean;
+// 	archived: boolean;
+// 	groups?: AtcGroupConfig[] | null;
+// 	team_name: string;
+// 	display?: AtcDisplayConfig | null;
+// 	parent_build_id?: number | null;
+// 	parent_job_id?: number | null;
+// 	last_updated?: number | null;
+// }
+export type AtcPipeline = z.infer<typeof AtcPipelineSchema>;
 
 // --- Build --- //
 
@@ -166,52 +192,55 @@ export interface AtcPipeline {
 /**
  * Information about the original build if this build is a re-run.
  */
-export interface AtcRerunOfBuild {
-	id?: number | null;
-	name?: string | null;
-}
+// export interface AtcRerunOfBuild {
+// 	id?: number | null;
+// 	name?: string | null;
+// }
+export type AtcRerunOfBuild = z.infer<typeof AtcRerunOfBuildSchema>;
 
 // Based on concourse/atc/build.go
 /**
  * Represents a Concourse build.
  */
-export interface AtcBuild {
-	id: number;
-	team_name: string;
-	name: string;
-	status: AtcBuildStatus;
-	api_url: string;
-	comment?: string | null;
-	job_name?: string | null;
-	resource_name?: string | null;
-	pipeline_id?: number | null;
-	pipeline_name?: string | null;
-	pipeline_instance_vars?: AtcInstanceVars | null;
-	start_time?: number | null;
-	end_time?: number | null;
-	reap_time?: number | null;
-	rerun_number?: number | null;
-	rerun_of?: AtcRerunOfBuild | null;
-	created_by?: string | null;
-}
+// export interface AtcBuild {
+// 	id: number;
+// 	team_name: string;
+// 	name: string;
+// 	status: AtcBuildStatus;
+// 	api_url: string;
+// 	comment?: string | null;
+// 	job_name?: string | null;
+// 	resource_name?: string | null;
+// 	pipeline_id?: number | null;
+// 	pipeline_name?: string | null;
+// 	pipeline_instance_vars?: AtcInstanceVars | null;
+// 	start_time?: number | null;
+// 	end_time?: number | null;
+// 	reap_time?: number | null;
+// 	rerun_number?: number | null;
+// 	rerun_of?: AtcRerunOfBuild | null;
+// 	created_by?: string | null;
+// }
+export type AtcBuild = z.infer<typeof AtcBuildSchema>;
 
 // Based on concourse/atc/summary.go
 /**
  * Represents a summary of a Concourse build, often embedded in other objects.
  */
-export interface AtcBuildSummary {
-	id: number;
-	name: string;
-	status: AtcBuildStatus;
-	start_time?: number | null;
-	end_time?: number | null;
-	team_name: string;
-	pipeline_id: number;
-	pipeline_name: string;
-	pipeline_instance_vars?: AtcInstanceVars | null;
-	job_name?: string | null;
-	plan?: unknown | null; // Mapped from *json.RawMessage
-}
+// export interface AtcBuildSummary {
+// 	id: number;
+// 	name: string;
+// 	status: AtcBuildStatus;
+// 	start_time?: number | null;
+// 	end_time?: number | null;
+// 	team_name: string;
+// 	pipeline_id: number;
+// 	pipeline_name: string;
+// 	pipeline_instance_vars?: AtcInstanceVars | null;
+// 	job_name?: string | null;
+// 	plan?: unknown | null; // Mapped from *json.RawMessage
+// }
+export type AtcBuildSummary = z.infer<typeof AtcBuildSummarySchema>;
 
 // --- Job --- //
 
@@ -219,47 +248,50 @@ export interface AtcBuildSummary {
 /**
  * Represents an input configuration for a job.
  */
-export interface AtcJobInput {
-	name: string;
-	resource: string;
-	trigger: boolean;
-	passed?: string[] | null;
-	version?: AtcVersionConfig | null;
-}
+// export interface AtcJobInput {
+// 	name: string;
+// 	resource: string;
+// 	trigger: boolean;
+// 	passed?: string[] | null;
+// 	version?: AtcVersionConfig | null;
+// }
+export type AtcJobInput = z.infer<typeof AtcJobInputSchema>;
 
 // Based on concourse/atc/job.go
 /**
  * Represents an output configuration for a job.
  */
-export interface AtcJobOutput {
-	name: string;
-	resource: string;
-}
+// export interface AtcJobOutput {
+// 	name: string;
+// 	resource: string;
+// }
+export type AtcJobOutput = z.infer<typeof AtcJobOutputSchema>;
 
 // Based on concourse/atc/job.go
 /**
  * Represents a Concourse job.
  */
-export interface AtcJob {
-	id: number;
-	name: string;
-	team_name: string;
-	pipeline_id: number;
-	pipeline_name: string;
-	pipeline_instance_vars?: AtcInstanceVars | null;
-	paused?: boolean | null;
-	paused_by?: string | null;
-	paused_at?: number | null;
-	has_new_inputs?: boolean | null;
-	groups?: string[] | null;
-	first_logged_build_id?: number | null;
-	disable_manual_trigger?: boolean | null;
-	next_build: AtcBuild | null;
-	finished_build: AtcBuild | null;
-	transition_build?: AtcBuild | null;
-	inputs?: AtcJobInput[] | null;
-	outputs?: AtcJobOutput[] | null;
-}
+// export interface AtcJob {
+// 	id: number;
+// 	name: string;
+// 	team_name: string;
+// 	pipeline_id: number;
+// 	pipeline_name: string;
+// 	pipeline_instance_vars?: AtcInstanceVars | null;
+// 	paused?: boolean | null;
+// 	paused_by?: string | null;
+// 	paused_at?: number | null;
+// 	has_new_inputs?: boolean | null;
+// 	groups?: string[] | null;
+// 	first_logged_build_id?: number | null;
+// 	disable_manual_trigger?: boolean | null;
+// 	next_build: AtcBuild | null;
+// 	finished_build: AtcBuild | null;
+// 	transition_build?: AtcBuild | null;
+// 	inputs?: AtcJobInput[] | null;
+// 	outputs?: AtcJobOutput[] | null;
+// }
+export type AtcJob = z.infer<typeof AtcJobSchema>;
 
 // --- Resource & Resource Config --- //
 
@@ -267,51 +299,54 @@ export interface AtcJob {
 /**
  * Represents a specific version of a resource, including metadata and enabled status.
  */
-export interface AtcResourceVersion {
-	id: number;
-	metadata?: AtcMetadataField[] | null;
-	version: AtcVersion;
-	enabled: boolean;
-}
+// export interface AtcResourceVersion {
+// 	id: number;
+// 	metadata?: AtcMetadataField[] | null;
+// 	version: AtcVersion;
+// 	enabled: boolean;
+// }
+export type AtcResourceVersion = z.infer<typeof AtcResourceVersionSchema>;
 
 // Based on concourse/atc/resource.go
 /**
  * Represents a Concourse resource as returned by API endpoints (e.g., listing resources).
  * This is distinct from the ResourceConfig used in pipeline configuration.
  */
-export interface AtcResource {
-	name: string;
-	pipeline_id: number;
-	pipeline_name: string;
-	pipeline_instance_vars?: AtcInstanceVars | null;
-	team_name: string;
-	type: string;
-	last_checked?: number | null;
-	icon?: string | null;
-	pinned_version?: AtcVersion | null;
-	pinned_in_config?: boolean | null;
-	pin_comment?: string | null;
-	build?: AtcBuildSummary | null;
-}
+// export interface AtcResource {
+// 	name: string;
+// 	pipeline_id: number;
+// 	pipeline_name: string;
+// 	pipeline_instance_vars?: AtcInstanceVars | null;
+// 	team_name: string;
+// 	type: string;
+// 	last_checked?: number | null;
+// 	icon?: string | null;
+// 	pinned_version?: AtcVersion | null;
+// 	pinned_in_config?: boolean | null;
+// 	pin_comment?: string | null;
+// 	build?: AtcBuildSummary | null;
+// }
+export type AtcResource = z.infer<typeof AtcResourceSchema>;
 
 // Based on concourse/atc/config.go
 /**
  * Represents the configuration of a resource within a pipeline.
  */
-export interface AtcResourceConfig {
-	name: string;
-	old_name?: string | null;
-	public?: boolean | null;
-	webhook_token?: string | null;
-	type: string;
-	source: AtcSource;
-	check_every?: AtcCheckEvery | null;
-	check_timeout?: string | null;
-	tags?: AtcTags | null;
-	version?: AtcVersion | null;
-	icon?: string | null;
-	expose_build_created_by?: boolean | null;
-}
+// export interface AtcResourceConfig {
+// 	name: string;
+// 	old_name?: string | null;
+// 	public?: boolean | null;
+// 	webhook_token?: string | null;
+// 	type: string;
+// 	source: AtcSource;
+// 	check_every?: AtcCheckEvery | null;
+// 	check_timeout?: string | null;
+// 	tags?: AtcTags | null;
+// 	version?: AtcVersion | null;
+// 	icon?: string | null;
+// 	expose_build_created_by?: boolean | null;
+// }
+export type AtcResourceConfig = z.infer<typeof AtcResourceConfigSchema>;
 
 // --- Resource Type --- //
 
@@ -319,16 +354,17 @@ export interface AtcResourceConfig {
 /**
  * Represents the configuration of a custom resource type within a pipeline.
  */
-export interface AtcResourceType {
-	name: string;
-	type: string;
-	source: AtcSource;
-	defaults?: AtcSource | null;
-	privileged?: boolean | null;
-	check_every?: AtcCheckEvery | null;
-	tags?: AtcTags | null;
-	params?: AtcParams | null;
-}
+// export interface AtcResourceType {
+// 	name: string;
+// 	type: string;
+// 	source: AtcSource;
+// 	defaults?: AtcSource | null;
+// 	privileged?: boolean | null;
+// 	check_every?: AtcCheckEvery | null;
+// 	tags?: AtcTags | null;
+// 	params?: AtcParams | null;
+// }
+export type AtcResourceType = z.infer<typeof AtcResourceTypeSchema>;
 
 // --- Worker --- //
 
@@ -336,38 +372,40 @@ export interface AtcResourceType {
 /**
  * Describes a resource type supported by a worker.
  */
-export interface AtcWorkerResourceType {
-	type: string;
-	image: string;
-	version?: string | null;
-	privileged?: boolean | null;
-	unique_version_history?: boolean | null;
-}
+// export interface AtcWorkerResourceType {
+// 	type: string;
+// 	image: string;
+// 	version?: string | null;
+// 	privileged?: boolean | null;
+// 	unique_version_history?: boolean | null;
+// }
+export type AtcWorkerResourceType = z.infer<typeof AtcWorkerResourceTypeSchema>;
 
 // Based on concourse/atc/worker.go
 /**
  * Represents a Concourse worker.
  */
-export interface AtcWorker {
-	addr: string; // Mapped from GardenAddr
-	baggageclaim_url?: string | null;
-	certs_path?: string | null;
-	http_proxy_url?: string | null;
-	https_proxy_url?: string | null;
-	no_proxy?: string | null;
-	active_containers: number;
-	active_volumes: number;
-	active_tasks: number;
-	resource_types: AtcWorkerResourceType[];
-	platform: string;
-	tags?: AtcTags | null;
-	team?: string | null;
-	name: string;
-	version?: string | null;
-	start_time: number;
-	ephemeral?: boolean | null;
-	state: string;
-}
+// export interface AtcWorker {
+// 	addr: string; // Mapped from GardenAddr
+// 	baggageclaim_url?: string | null;
+// 	certs_path?: string | null;
+// 	http_proxy_url?: string | null;
+// 	https_proxy_url?: string | null;
+// 	no_proxy?: string | null;
+// 	active_containers: number;
+// 	active_volumes: number;
+// 	active_tasks: number;
+// 	resource_types: AtcWorkerResourceType[];
+// 	platform: string;
+// 	tags?: AtcTags | null;
+// 	team?: string | null;
+// 	name: string;
+// 	version?: string | null;
+// 	start_time: number;
+// 	ephemeral?: boolean | null;
+// 	state: string;
+// }
+export type AtcWorker = z.infer<typeof AtcWorkerSchema>;
 
 // --- User --- //
 
@@ -375,30 +413,32 @@ export interface AtcWorker {
 /**
  * Represents basic information about a user, often used in lists.
  */
-export interface AtcUser {
-	id?: number | null;
-	username?: string | null;
-	connector?: string | null;
-	last_login?: number | null;
-	sub?: string | null;
-}
+// export interface AtcUser {
+// 	id?: number | null;
+// 	username?: string | null;
+// 	connector?: string | null;
+// 	last_login?: number | null;
+// 	sub?: string | null;
+// }
+export type AtcUser = z.infer<typeof AtcUserSchema>;
 
 // Based on concourse/atc/user.go
 /**
  * Represents detailed information about the authenticated user.
  */
-export interface AtcUserInfo {
-	sub: string;
-	name: string;
-	user_id: string;
-	user_name: string;
-	email: string;
-	is_admin: boolean;
-	is_system: boolean;
-	teams: Record<string, string[]>;
-	connector: string;
-	display_user_id: string;
-}
+// export interface AtcUserInfo {
+// 	sub: string;
+// 	name: string;
+// 	user_id: string;
+// 	user_name: string;
+// 	email: string;
+// 	is_admin: boolean;
+// 	is_system: boolean;
+// 	teams: Record<string, string[]>;
+// 	connector: string;
+// 	display_user_id: string;
+// }
+export type AtcUserInfo = z.infer<typeof AtcUserInfoSchema>;
 
 // --- Events --- //
 
