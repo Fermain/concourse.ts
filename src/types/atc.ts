@@ -402,6 +402,12 @@ export interface AtcUserInfo {
 
 // --- Events --- //
 
+// Base interface for common optional event data fields
+interface AtcEventDataBase {
+	time?: number | null;
+	origin?: AtcOrigin | null;
+}
+
 // Shadow task types from concourse/atc/event/events.go TaskConfig
 export interface AtcEventTaskRunConfig {
 	path: string;
@@ -420,122 +426,80 @@ export interface AtcEventTaskConfig {
 }
 
 // Specific Event Interfaces (Payloads within the 'data' field)
-export interface AtcEventErrorData {
+export interface AtcEventErrorData extends AtcEventDataBase {
 	message: string;
-	origin?: AtcOrigin | null;
-	time?: number | null;
 }
-export interface AtcEventFinishTaskData {
+export interface AtcEventFinishTaskData extends AtcEventDataBase {
 	time: number;
 	exit_status: number;
-	origin?: AtcOrigin | null;
 }
-export interface AtcEventInitializeTaskData {
-	time?: number | null;
-	origin?: AtcOrigin | null;
+export interface AtcEventInitializeTaskData extends AtcEventDataBase {
 	config?: AtcEventTaskConfig | null;
 }
-export interface AtcEventStartTaskData {
-	time?: number | null;
-	origin?: AtcOrigin | null;
+export interface AtcEventStartTaskData extends AtcEventDataBase {
 	config?: AtcEventTaskConfig | null;
 }
-export interface AtcEventStatusData {
+export interface AtcEventStatusData extends AtcEventDataBase {
 	status: AtcBuildStatus;
-	time?: number | null;
 }
-export interface AtcEventWaitingForWorkerData {
-	time?: number | null;
-	origin?: AtcOrigin | null;
+export interface AtcEventWaitingForWorkerData extends AtcEventDataBase {
 }
-export interface AtcEventSelectedWorkerData {
-	time?: number | null;
-	origin?: AtcOrigin | null;
+export interface AtcEventSelectedWorkerData extends AtcEventDataBase {
 	selected_worker?: string | null;
 }
-export interface AtcEventStreamingVolumeData {
-	time?: number | null;
-	origin?: AtcOrigin | null;
+export interface AtcEventStreamingVolumeData extends AtcEventDataBase {
 	volume?: string | null;
 	source_worker?: string | null;
 	dest_worker?: string | null;
 }
-export interface AtcEventWaitingForStreamedVolumeData {
-	time?: number | null;
-	origin?: AtcOrigin | null;
+export interface AtcEventWaitingForStreamedVolumeData extends AtcEventDataBase {
 	volume?: string | null;
 	dest_worker?: string | null;
 }
-export interface AtcEventLogData {
-	time?: number | null;
-	origin?: AtcOrigin | null;
+export interface AtcEventLogData extends AtcEventDataBase {
 	payload: string;
 }
-export interface AtcEventInitializeCheckData {
-	origin?: AtcOrigin | null;
-	time?: number | null;
+export interface AtcEventInitializeCheckData extends AtcEventDataBase {
 	name?: string | null;
 }
-export interface AtcEventInitializeGetData {
-	origin?: AtcOrigin | null;
-	time?: number | null;
+export interface AtcEventInitializeGetData extends AtcEventDataBase {
 }
-export interface AtcEventStartGetData {
-	origin?: AtcOrigin | null;
-	time?: number | null;
+export interface AtcEventStartGetData extends AtcEventDataBase {
 }
-export interface AtcEventFinishGetData {
-	origin?: AtcOrigin | null;
+export interface AtcEventFinishGetData extends AtcEventDataBase {
 	time: number;
 	exit_status: number;
 	version?: AtcVersion | null;
 	metadata?: AtcMetadataField[] | null;
 }
-export interface AtcEventInitializePutData {
-	origin?: AtcOrigin | null;
-	time?: number | null;
+export interface AtcEventInitializePutData extends AtcEventDataBase {
 }
-export interface AtcEventStartPutData {
-	origin?: AtcOrigin | null;
-	time?: number | null;
+export interface AtcEventStartPutData extends AtcEventDataBase {
 }
-export interface AtcEventFinishPutData {
-	origin?: AtcOrigin | null;
+export interface AtcEventFinishPutData extends AtcEventDataBase {
 	time: number;
 	exit_status: number;
 	version?: AtcVersion | null;
 	metadata?: AtcMetadataField[] | null;
 }
-export interface AtcEventSetPipelineChangedData {
-	origin?: AtcOrigin | null;
+export interface AtcEventSetPipelineChangedData extends AtcEventDataBase {
 	changed?: boolean | null;
 }
-export interface AtcEventInitializeData {
-	origin?: AtcOrigin | null;
-	time?: number | null;
+export interface AtcEventInitializeData extends AtcEventDataBase {
 }
-export interface AtcEventStartData {
-	origin?: AtcOrigin | null;
-	time?: number | null;
+export interface AtcEventStartData extends AtcEventDataBase {
 }
-export interface AtcEventFinishData {
-	origin?: AtcOrigin | null;
+export interface AtcEventFinishData extends AtcEventDataBase {
 	time: number;
 	succeeded?: boolean | null;
 }
-export interface AtcEventImageCheckData {
-	time?: number | null;
-	origin?: AtcOrigin | null;
+export interface AtcEventImageCheckData extends AtcEventDataBase {
 	plan?: unknown | null;
 }
-export interface AtcEventImageGetData {
-	time?: number | null;
-	origin?: AtcOrigin | null;
+export interface AtcEventImageGetData extends AtcEventDataBase {
 	plan?: unknown | null;
 }
-export interface AtcEventAcrossSubstepsData {
-	time?: number | null;
-	origin?: AtcOrigin | null;
+export interface AtcEventAcrossSubstepsData extends AtcEventDataBase {
 	substeps?: unknown[] | null;
 }
 
