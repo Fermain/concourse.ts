@@ -2,7 +2,9 @@ import { z } from "zod"; // Import z itself
 import { ConcourseApiError, ConcourseValidationError } from "./errors"; // Import custom API error and validation error
 // No need to import fetch, it's globally available
 import type {
+	AtcBuild,
 	AtcBuildSummary,
+	AtcConfig,
 	AtcInfo,
 	AtcJob,
 	AtcPipeline,
@@ -14,28 +16,26 @@ import type {
 	AtcUserInfo,
 	AtcVersion,
 	AtcWorker,
-	AtcConfig,
 	Page,
-	AtcBuild,
 } from "./types/atc"; // Restore all type imports
 import {
+	AtcBuildArraySchema,
+	AtcBuildSchema,
 	AtcBuildSummarySchema,
+	AtcConfigSchema,
 	AtcInfoSchema,
 	AtcJobArraySchema,
+	AtcJobSchema, // Added Job schema
 	AtcPipelineArraySchema,
 	AtcResourceArraySchema,
 	AtcResourceSchema,
 	AtcResourceTypeArraySchema,
 	AtcResourceVersionArraySchema,
 	AtcTeamArraySchema,
+	AtcUserArraySchema, // Added for listActiveUsersSince
 	AtcUserInfoSchema, // Needed for getUserInfo
 	AtcUserSchema, // Needed for listActiveUsersSince
 	AtcWorkerArraySchema,
-	AtcUserArraySchema, // Added for listActiveUsersSince
-	AtcConfigSchema,
-	AtcBuildSchema,
-	AtcBuildArraySchema,
-	AtcJobSchema, // Added Job schema
 } from "./types/atc.schemas"; // Import Zod schemas
 
 // Placeholder for ATC types - we will define these properly later
@@ -66,7 +66,7 @@ export class ConcourseError extends Error {
 		public readonly cause?: unknown,
 	) {
 		super(message);
-		this.name = 'ConcourseError';
+		this.name = "ConcourseError";
 	}
 }
 
@@ -80,40 +80,45 @@ export class ConcourseClient {
 	private readonly token?: string;
 	private readonly username?: string;
 	private readonly password?: string;
-	private readonly authMethod: 'token' | 'basic' | 'none';
+	private readonly authMethod: "token" | "basic" | "none";
 
 	constructor(options: ConcourseClientOptions) {
 		if (!options.baseUrl) {
-			throw new Error('Concourse API base URL is required.');
+			throw new Error("Concourse API base URL is required.");
 		}
-		this.baseUrl = options.baseUrl.replace(/\/$/, '');
+		this.baseUrl = options.baseUrl.replace(/\/$/, "");
 
 		// Validate and store authentication details
 		const hasToken = !!options.token;
 		const hasBasic = !!options.username && !!options.password;
 
 		if (hasToken && hasBasic) {
-			throw new Error('Provide either token or username/password for authentication, not both.');
-		} else if (hasToken) {
+			throw new Error(
+				"Provide either token or username/password for authentication, not both.",
+			);
+		}
+		if (hasToken) {
 			this.token = options.token;
-			this.authMethod = 'token';
+			this.authMethod = "token";
 		} else if (hasBasic) {
 			this.username = options.username;
 			this.password = options.password;
-			this.authMethod = 'basic';
+			this.authMethod = "basic";
 		} else {
 			// Allow no auth for potentially public endpoints
-			this.authMethod = 'none';
+			this.authMethod = "none";
 		}
 
 		// Warn if only one of username/password is provided
 		if (!!options.username !== !!options.password) {
-			console.warn('Both username and password must be provided for Basic Authentication. Proceeding without authentication.');
+			console.warn(
+				"Both username and password must be provided for Basic Authentication. Proceeding without authentication.",
+			);
 			// Reset basic auth attempt if incomplete
-			if (this.authMethod === 'basic') {
+			if (this.authMethod === "basic") {
 				this.username = undefined;
 				this.password = undefined;
-				this.authMethod = 'none';
+				this.authMethod = "none";
 			}
 		}
 	}
@@ -136,17 +141,21 @@ export class ConcourseClient {
 		const headers = new Headers(options.headers);
 
 		// Add Authorization header based on configured method
-		if (this.authMethod === 'token' && this.token) {
-			headers.set('Authorization', `Bearer ${this.token}`);
-		} else if (this.authMethod === 'basic' && this.username && this.password) {
+		if (this.authMethod === "token" && this.token) {
+			headers.set("Authorization", `Bearer ${this.token}`);
+		} else if (this.authMethod === "basic" && this.username && this.password) {
 			const credentials = btoa(`${this.username}:${this.password}`);
-			headers.set('Authorization', `Basic ${credentials}`);
+			headers.set("Authorization", `Basic ${credentials}`);
 		}
 
-		headers.set('Accept', 'application/json');
-		if (options.method === 'POST' || options.method === 'PUT' || options.method === 'PATCH') {
-			if (!headers.has('Content-Type')) {
-				headers.set('Content-Type', 'application/json');
+		headers.set("Accept", "application/json");
+		if (
+			options.method === "POST" ||
+			options.method === "PUT" ||
+			options.method === "PATCH"
+		) {
+			if (!headers.has("Content-Type")) {
+				headers.set("Content-Type", "application/json");
 			}
 		}
 
@@ -157,10 +166,12 @@ export class ConcourseClient {
 			});
 
 			if (!response.ok) {
-				let errorBody = 'Unknown error';
+				let errorBody = "Unknown error";
 				try {
 					errorBody = await response.text();
-				} catch (e) { /* Ignore */ }
+				} catch (e) {
+					/* Ignore */
+				}
 				throw new ConcourseError(
 					`API request failed: ${response.status} ${response.statusText} - ${errorBody}`,
 					response,
@@ -168,7 +179,10 @@ export class ConcourseClient {
 			}
 
 			// Handle empty response body for success codes like 204
-			if (response.status === 204 || response.headers.get('Content-Length') === '0') {
+			if (
+				response.status === 204 ||
+				response.headers.get("Content-Length") === "0"
+			) {
 				// Check if the schema is null, void, or undefined
 				if (
 					schema instanceof z.ZodNull ||
@@ -178,13 +192,20 @@ export class ConcourseClient {
 					// Use safeParse for potentially undefined/null values
 					const validationResult = schema.safeParse(undefined);
 					if (!validationResult.success) {
-                        // This should theoretically not happen if the schema is void/null/undefined
-                        throw new ConcourseError('Failed to parse expected empty response', response, validationResult.error);
-                    }
+						// This should theoretically not happen if the schema is void/null/undefined
+						throw new ConcourseError(
+							"Failed to parse expected empty response",
+							response,
+							validationResult.error,
+						);
+					}
 					return validationResult.data;
 				}
-                // If the schema was not null/void/undefined, throw because the empty response is unexpected.
-				throw new ConcourseError('API returned unexpected empty response for non-empty schema', response);
+				// If the schema was not null/void/undefined, throw because the empty response is unexpected.
+				throw new ConcourseError(
+					"API returned unexpected empty response for non-empty schema",
+					response,
+				);
 			}
 
 			const data = await response.json();
@@ -221,7 +242,7 @@ export class ConcourseClient {
 	 * @returns {Promise<AtcInfo>} Information about the ATC version, worker version, etc.
 	 */
 	async getInfo(): Promise<AtcInfo> {
-		return this.request('/api/v1/info', AtcInfoSchema);
+		return this.request("/api/v1/info", AtcInfoSchema);
 	}
 
 	// --- Pipelines ---

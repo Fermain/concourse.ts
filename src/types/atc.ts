@@ -4,33 +4,33 @@
 // ========================================
 
 // Use import type for schema imports used only in z.infer
-import type { z } from 'zod';
+import type { z } from "zod";
 // Use import type for schema imports used only in z.infer
 import type {
-	AtcMetadataFieldSchema,
-	AtcTeamSchema,
+	AtcBuildSchema,
+	AtcBuildSummarySchema,
+	AtcConfigSchema,
+	AtcDisplayConfigSchema,
+	AtcGroupConfigSchema,
 	// Add imports for other schemas to be inferred
 	AtcInfoSchema,
-	AtcPipelineSchema,
-	AtcGroupConfigSchema,
-	AtcDisplayConfigSchema,
-	AtcBuildSchema,
-	AtcRerunOfBuildSchema,
-	AtcBuildSummarySchema,
-	AtcJobSchema,
 	AtcJobInputSchema,
 	AtcJobOutputSchema,
-	AtcResourceVersionSchema,
-	AtcResourceSchema,
-	AtcResourceConfigSchema,
-	AtcResourceTypeSchema,
-	AtcWorkerSchema,
-	AtcWorkerResourceTypeSchema,
-	AtcUserSchema,
-	AtcUserInfoSchema,
+	AtcJobSchema,
+	AtcMetadataFieldSchema,
 	AtcOriginSchema,
-	AtcConfigSchema
-} from './atc.schemas';
+	AtcPipelineSchema,
+	AtcRerunOfBuildSchema,
+	AtcResourceConfigSchema,
+	AtcResourceSchema,
+	AtcResourceTypeSchema,
+	AtcResourceVersionSchema,
+	AtcTeamSchema,
+	AtcUserInfoSchema,
+	AtcUserSchema,
+	AtcWorkerResourceTypeSchema,
+	AtcWorkerSchema,
+} from "./atc.schemas";
 
 // --- Primitives / Base Types --- //
 
@@ -489,8 +489,7 @@ export interface AtcEventStartTaskData extends AtcEventDataBase {
 export interface AtcEventStatusData extends AtcEventDataBase {
 	status: AtcBuildStatus;
 }
-export interface AtcEventWaitingForWorkerData extends AtcEventDataBase {
-}
+export interface AtcEventWaitingForWorkerData extends AtcEventDataBase {}
 export interface AtcEventSelectedWorkerData extends AtcEventDataBase {
 	selected_worker?: string | null;
 }
@@ -509,20 +508,16 @@ export interface AtcEventLogData extends AtcEventDataBase {
 export interface AtcEventInitializeCheckData extends AtcEventDataBase {
 	name?: string | null;
 }
-export interface AtcEventInitializeGetData extends AtcEventDataBase {
-}
-export interface AtcEventStartGetData extends AtcEventDataBase {
-}
+export interface AtcEventInitializeGetData extends AtcEventDataBase {}
+export interface AtcEventStartGetData extends AtcEventDataBase {}
 export interface AtcEventFinishGetData extends AtcEventDataBase {
 	time: number;
 	exit_status: number;
 	version?: AtcVersion | null;
 	metadata?: AtcMetadataField[] | null;
 }
-export interface AtcEventInitializePutData extends AtcEventDataBase {
-}
-export interface AtcEventStartPutData extends AtcEventDataBase {
-}
+export interface AtcEventInitializePutData extends AtcEventDataBase {}
+export interface AtcEventStartPutData extends AtcEventDataBase {}
 export interface AtcEventFinishPutData extends AtcEventDataBase {
 	time: number;
 	exit_status: number;
@@ -532,10 +527,8 @@ export interface AtcEventFinishPutData extends AtcEventDataBase {
 export interface AtcEventSetPipelineChangedData extends AtcEventDataBase {
 	changed?: boolean | null;
 }
-export interface AtcEventInitializeData extends AtcEventDataBase {
-}
-export interface AtcEventStartData extends AtcEventDataBase {
-}
+export interface AtcEventInitializeData extends AtcEventDataBase {}
+export interface AtcEventStartData extends AtcEventDataBase {}
 export interface AtcEventFinishData extends AtcEventDataBase {
 	time: number;
 	succeeded?: boolean | null;
