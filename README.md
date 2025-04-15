@@ -13,6 +13,14 @@ A JavaScript SDK for the Concourse CI API.
 npm install --save @infrablocks/concourse
 ```
 
+## Installation (TypeScript)
+
+```bash
+npm install @infrablocks/concourse
+# or
+yarn add @infrablocks/concourse
+```
+
 ## Usage
 
 ### Construction
@@ -202,6 +210,62 @@ const pipelines = await teamClient.listPipelines()
 const containers = await teamClient.listContainers({pipelineName: pipelines[0].name})
 // => [{ id: "4fd6fbe8-2456-49b9-6464-4eab8f2a7ce3", workerName: "f9214ff6a574", type: "check"}]
 ```
+
+## Usage (TypeScript)
+
+Import the client and necessary types:
+
+```typescript
+import ConcourseClient from '@infrablocks/concourse';
+import { Build, Pipeline } from '@infrablocks/concourse'; // Import specific types
+
+async function main() {
+  try {
+    // Instantiate the client (replace with your details)
+    const client = ConcourseClient.instanceFor({
+      url: 'https://ci.example.com',
+      username: 'your_username',
+      password: 'your_password',
+      teamName: 'main' // Optional, defaults to 'main'
+    });
+
+    // Get cluster info
+    const info = await client.getInfo();
+    console.log('Concourse Version:', info.version);
+
+    // List pipelines in the 'main' team
+    const teamClient = client.forTeam('main');
+    const pipelines: Pipeline[] = await teamClient.listPipelines();
+    console.log('Pipelines:', pipelines.map(p => p.name));
+
+    // Get the latest build for a specific job
+    if (pipelines.length > 0) {
+      const firstPipeline = pipelines[0].name;
+      const jobs = await teamClient.forPipeline(firstPipeline).listJobs();
+      if (jobs.length > 0) {
+        const firstJob = jobs[0].name;
+        const latestBuild: Build | null = await teamClient
+          .forPipeline(firstPipeline)
+          .forJob(firstJob)
+          .getLatestBuild(); // Note: Requires Job model class to be implemented/exported fully
+
+        if (latestBuild) {
+          console.log(`Latest build for ${firstJob}: #${latestBuild.name} (${latestBuild.status})`);
+        } else {
+          console.log(`No builds found for ${firstJob}`);
+        }
+      }
+    }
+
+  } catch (error) {
+    console.error('Error interacting with Concourse:', error);
+  }
+}
+
+main();
+```
+
+See the `src/types/` directory for available data interfaces (Build, Job, Pipeline, Resource, etc.).
 
 ## Development
 

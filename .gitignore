@@ -17,6 +17,9 @@
 !/commonjs/package.json
 .direnv/
 
+## Build output:
+tsconfig.tsbuildinfo
+
 ## Documentation cache and generated files:
 /.yardoc/
 /_yardoc/

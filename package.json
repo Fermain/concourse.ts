@@ -3,6 +3,7 @@
   "version": "0.28.0-pre.11",
   "description": "A JavaScript SDK for the Concourse CI API.",
   "main": "./commonjs/index.js",
+  "types": "./commonjs/index.d.ts",
   "exports": {
     "import": "./src/index.js",
     "require": "./commonjs/index.js"
@@ -10,8 +11,9 @@
   "scripts": {
     "lint": "standard --env mocha",
     "lintFix": "standard --env mocha --fix",
-    "start": "babel src -s inline -d commonjs --watch",
-    "build": "babel src -s inline -d commonjs",
+    "start": "tsc --watch",
+    "build": "tsc",
+    "prebuild": "rm -rf commonjs",
     "prepublishOnly": "npm run lint && npm run test && npm run build",
     "version:bump:pre": "npm version prerelease --preid=pre",
     "version:bump:minor": "npm version minor",
@@ -70,6 +72,13 @@
     "@babel/core": "^7.23.2",
     "@babel/preset-env": "^7.23.2",
     "@faker-js/faker": "^8.2.0",
+    "@types/camelcase-keys-deep": "^0.1.2",
+    "@types/form-urlencoded": "^4.4.2",
+    "@types/js-base64": "^3.3.1",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/node": "^22.14.1",
+    "@types/ramda": "^0.30.2",
+    "@types/semver": "^7.7.0",
     "axios-mock-adapter": "^1.22.0",
     "chai": "^5.0.0",
     "hosted-git-info": "^8.0.0",
@@ -78,6 +87,7 @@
     "mocha": "^11.0.1",
     "node-rsa": "^1.1.1",
     "sinon": "^20.0.0",
-    "standard": "^17.1.0"
+    "standard": "^17.1.0",
+    "typescript": "^5.8.3"
   }
 }
