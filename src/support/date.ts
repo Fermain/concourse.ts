@@ -4,8 +4,8 @@
  * @returns The Unix timestamp in seconds.
  */
 export const toUnixTime = (date: Date | number): number => {
-  const time = typeof date === 'number' ? date : date.getTime();
-  return Math.floor(time / 1000);
+	const time = typeof date === "number" ? date : date.getTime();
+	return Math.floor(time / 1000);
 };
 
 /**
@@ -13,4 +13,3 @@ export const toUnixTime = (date: Date | number): number => {
  * @returns The current Unix timestamp in seconds.
  */
 export const currentUnixTime = (): number => toUnixTime(Date.now());
- 

@@ -1,132 +1,214 @@
-import * as R from 'ramda'
-import camelcaseKeysDeep from 'camelcase-keys-deep'
+import camelcaseKeysDeep from "camelcase-keys-deep";
+import * as R from "ramda";
 
-// Assuming support files are converted to TS
-import {
-  teamPipelineResourcePauseUrl,
-  teamPipelineResourceUnpauseUrl,
-  teamPipelineResourceVersionsUrl,
-  teamPipelineResourceVersionUrl
-} from '../support/urls.js'
-import { parseJson } from '../support/http/transformers.js'
-import { HttpClient } from '../support/http/factory.js'
+// Import API_PATHS
+import { API_PATHS } from "../paths.js";
+import type { HttpClient } from "../support/http/factory.js";
+import { parseJson } from "../support/http/transformers.js";
 
-// Import related subclient and types
-import TeamPipelineResourceVersionClient from './TeamPipelineResourceVersionClient.js' // Assuming .ts, ADDED .js
-import { ResourceVersion } from '../types/resourceVersion.js' // ADDED .js
-import { ListBuildsOptions } from './TeamClient.js' // Reuse options type, ADDED .js
+// Import types
+import type {
+	ListBuildsOptions, // Keep if needed elsewhere, otherwise remove
+	TeamPipelineResourceClientOptions,
+} from "../types/options.js";
+// Removed duplicate imports
+// import type { Resource, ResourceVersion } from "../types/resource.js";
+// import type TeamPipelineResourceVersionClient from "./TeamPipelineResourceVersionClient.js";
+
+// Import necessary types and values used in methods
+// Corrected path for ResourceVersion
+import type { ResourceVersion } from "../types/resourceVersion.js";
+// Use regular import for the class constructor
+import TeamPipelineResourceVersionClient from "./TeamPipelineResourceVersionClient.js";
 
 // --- Type Definitions ---
 
-interface TeamPipelineResourceClientOptions {
-  apiUrl: string;
-  httpClient: HttpClient;
-  teamName: string;
-  pipelineName: string;
-  resourceName: string;
-}
+// REMOVE_START
+// // Remove apiUrl from options
+// interface TeamPipelineResourceClientOptions {
+// 	httpClient: HttpClient;
+// 	teamName: string;
+// 	pipelineName: string;
+// 	resourceName: string;
+// }
+// REMOVE_END
 
 // --- TeamPipelineResourceClient Class ---
 
 export default class TeamPipelineResourceClient {
-  private apiUrl: string;
-  private httpClient: HttpClient;
-  private teamName: string;
-  private pipelineName: string;
-  private resourceName: string;
+	private apiUrl: string;
+	private httpClient: HttpClient;
+	private teamName: string;
+	private pipelineName: string;
+	private resourceName: string;
 
-  constructor (options: TeamPipelineResourceClientOptions) {
-    if (!options.apiUrl) throw new Error('apiUrl is required');
-    if (!options.httpClient) throw new Error('httpClient is required');
-    if (!options.teamName) throw new Error('teamName is required');
-    if (!options.pipelineName) throw new Error('pipelineName is required');
-    if (!options.resourceName) throw new Error('resourceName is required');
+	constructor(options: TeamPipelineResourceClientOptions) {
+		// Validate apiUrl
+		if (!options.apiUrl) throw new Error("apiUrl is required");
+		if (typeof options.apiUrl !== "string") {
+			throw new Error('Invalid parameter(s): ["apiUrl" must be a string"].');
+		}
+		try {
+			new URL(options.apiUrl);
+		} catch (_) {
+			throw new Error('Invalid parameter(s): ["apiUrl" must be a valid uri"].');
+		}
 
-    this.apiUrl = options.apiUrl;
-    this.httpClient = options.httpClient;
-    this.teamName = options.teamName;
-    this.pipelineName = options.pipelineName;
-    this.resourceName = options.resourceName;
-  }
+		// Validate httpClient
+		if (!options.httpClient || typeof options.httpClient !== "function") {
+			throw new Error(
+				'Invalid parameter(s): ["httpClient" must be of type function"].',
+			);
+		}
 
-  /** Pauses the resource checks. */
-  async pause (): Promise<void> {
-    await this.httpClient.put(
-      teamPipelineResourcePauseUrl(
-        this.apiUrl, this.teamName, this.pipelineName, this.resourceName)
-    );
-  }
+		// Validate teamName
+		if (!options.teamName || typeof options.teamName !== "string") {
+			throw new Error('Invalid parameter(s): ["teamName" must be a string"].');
+		}
 
-  /** Unpauses the resource checks. */
-  async unpause (): Promise<void> {
-    await this.httpClient.put(
-      teamPipelineResourceUnpauseUrl(
-        this.apiUrl, this.teamName, this.pipelineName, this.resourceName)
-    );
-  }
+		// Validate pipelineName
+		if (!options.pipelineName || typeof options.pipelineName !== "string") {
+			throw new Error(
+				'Invalid parameter(s): ["pipelineName" must be a string"].',
+			);
+		}
 
-  /**
-   * Lists versions of the resource.
-   * @param options Optional query parameters (limit, since, until).
-   * @returns A promise that resolves to an array of resource versions.
-   */
-  async listVersions (options: ListBuildsOptions = {}): Promise<ResourceVersion[]> {
-    // Basic type validation for options
-    if (options.limit !== undefined && typeof options.limit !== 'number') throw new Error('limit must be a number');
-    if (options.since !== undefined && typeof options.since !== 'number') throw new Error('since must be a number');
-    if (options.until !== undefined && typeof options.until !== 'number') throw new Error('until must be a number');
+		// Validate resourceName
+		if (!options.resourceName || typeof options.resourceName !== "string") {
+			throw new Error(
+				'Invalid parameter(s): ["resourceName" must be a string"].',
+			);
+		}
 
-    const params = R.reject(R.isNil, {
-      limit: options.limit,
-      since: options.since, // API might use version IDs for since/until here?
-      until: options.until
-    });
+		this.apiUrl = options.apiUrl;
+		this.httpClient = options.httpClient;
+		this.teamName = options.teamName;
+		this.pipelineName = options.pipelineName;
+		this.resourceName = options.resourceName;
+	}
 
-    const url = teamPipelineResourceVersionsUrl(
-      this.apiUrl, this.teamName, this.pipelineName, this.resourceName);
+	/** Pauses the resource checks. */
+	async pause(): Promise<void> {
+		// Use relative path
+		await this.httpClient.put(
+			API_PATHS.teams.pipelines.resources.pause(
+				this.teamName,
+				this.pipelineName,
+				this.resourceName,
+			),
+		);
+	}
 
-    const { data: versions } = await this.httpClient.get<ResourceVersion[]>(
-      url,
-      { params, transformResponse: [parseJson, camelcaseKeysDeep] }
-    );
-    return versions;
-  }
+	/** Unpauses the resource checks. */
+	async unpause(): Promise<void> {
+		// Use relative path
+		await this.httpClient.put(
+			API_PATHS.teams.pipelines.resources.unpause(
+				this.teamName,
+				this.pipelineName,
+				this.resourceName,
+			),
+		);
+	}
 
-  /**
-   * Gets a specific version of the resource by its ID.
-   * @param versionId The ID of the resource version.
-   * @returns A promise that resolves to the resource version data.
-   */
-  async getVersion (versionId: number): Promise<ResourceVersion> {
-    if (versionId === undefined || typeof versionId !== 'number' || versionId < 1) {
-      throw new Error('versionId must be a positive integer');
-    }
-    const url = teamPipelineResourceVersionUrl(
-      this.apiUrl, this.teamName, this.pipelineName, this.resourceName, versionId);
+	/**
+	 * Lists versions of the resource.
+	 * @param options Optional query parameters (limit, since, until).
+	 * @returns A promise that resolves to an array of resource versions.
+	 */
+	async listVersions(
+		options: ListBuildsOptions = {},
+	): Promise<ResourceVersion[]> {
+		if (
+			options.limit !== undefined &&
+			(typeof options.limit !== "number" ||
+				!Number.isInteger(options.limit) ||
+				options.limit <= 0)
+		)
+			throw new Error("limit must be a positive integer");
+		if (
+			options.since !== undefined &&
+			(typeof options.since !== "number" ||
+				!Number.isInteger(options.since) ||
+				options.since <= 0)
+		)
+			throw new Error("since must be a positive integer");
+		if (
+			options.until !== undefined &&
+			(typeof options.until !== "number" ||
+				!Number.isInteger(options.until) ||
+				options.until <= 0)
+		)
+			throw new Error("until must be a positive integer");
 
-    const { data: version } = await this.httpClient.get<ResourceVersion>(
-      url,
-      { transformResponse: [parseJson, camelcaseKeysDeep] }
-    );
-    return version;
-  }
+		const params = R.reject(R.isNil, {
+			limit: options.limit,
+			since: options.since,
+			until: options.until,
+		});
 
-  /**
-   * Returns a new client scoped to a specific version of this resource.
-   * @param versionId The ID of the resource version.
-   * @returns A TeamPipelineResourceVersionClient instance.
-   */
-  forVersion (versionId: number): TeamPipelineResourceVersionClient {
-    if (versionId === undefined || typeof versionId !== 'number' || versionId < 1) {
-      throw new Error('versionId must be a positive integer');
-    }
-    return new TeamPipelineResourceVersionClient({
-      apiUrl: this.apiUrl,
-      httpClient: this.httpClient,
-      teamName: this.teamName,
-      pipelineName: this.pipelineName,
-      resourceName: this.resourceName,
-      versionId
-    });
-  }
-} 
+		// Use relative path
+		const path = API_PATHS.teams.pipelines.resources.listVersions(
+			this.teamName,
+			this.pipelineName,
+			this.resourceName,
+		);
+
+		const { data: versions } = await this.httpClient.get<ResourceVersion[]>(
+			path,
+			{ params, transformResponse: [parseJson, camelcaseKeysDeep] },
+		);
+		return versions;
+	}
+
+	/**
+	 * Gets a specific version of the resource by its ID.
+	 * @param versionId The ID of the resource version.
+	 * @returns A promise that resolves to the resource version data.
+	 */
+	async getVersion(versionId: number): Promise<ResourceVersion> {
+		if (
+			versionId === undefined ||
+			typeof versionId !== "number" ||
+			versionId < 1
+		) {
+			throw new Error("versionId must be a positive integer");
+		}
+		// Use relative path
+		const path = API_PATHS.teams.pipelines.resources.versions.details(
+			this.teamName,
+			this.pipelineName,
+			this.resourceName,
+			versionId,
+		);
+
+		const { data: version } = await this.httpClient.get<ResourceVersion>(path, {
+			transformResponse: [parseJson, camelcaseKeysDeep],
+		});
+		return version;
+	}
+
+	/**
+	 * Returns a new client scoped to a specific version of this resource.
+	 * @param versionId The ID of the resource version.
+	 * @returns A TeamPipelineResourceVersionClient instance.
+	 */
+	forVersion(versionId: number): TeamPipelineResourceVersionClient {
+		if (
+			versionId === undefined ||
+			typeof versionId !== "number" ||
+			versionId < 1
+		) {
+			throw new Error("versionId must be a positive integer");
+		}
+		// Remove apiUrl from constructor args - RE-ADD apiUrl
+		return new TeamPipelineResourceVersionClient({
+			apiUrl: this.apiUrl, // Add apiUrl back
+			httpClient: this.httpClient,
+			teamName: this.teamName,
+			pipelineName: this.pipelineName,
+			resourceName: this.resourceName,
+			versionId,
+		});
+	}
+}

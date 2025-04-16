@@ -36,3 +36,9 @@ tsconfig.tsbuildinfo
 *.ipr
 *.iws
 *.iml
+
+# Compiled JS and d.ts files alongside TS sources
+src/**/*.js
+src/**/*.d.ts
+!src/index.js # Keep if needed for specific export reasons
+!src/index.d.ts # Keep if needed for specific export reasons

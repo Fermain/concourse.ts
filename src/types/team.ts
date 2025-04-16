@@ -1,11 +1,9 @@
+import type { Identifiable, Named } from "./primitives.js";
+
 /**
  * Represents basic information about a Concourse team.
  */
-export interface Team {
-  /** The unique identifier for the team. */
-  id: number;
-  /** The name of the team. */
-  name: string;
-  /** Authentication settings for the team. */
-  auth?: { [provider: string]: { [key: string]: any } }; // Structure varies by provider
-} 
+export interface Team extends Identifiable, Named {
+	/** Authentication settings for the team. */
+	auth?: { [provider: string]: { [key: string]: unknown } }; // Replaced inner any with unknown
+}

@@ -1,26 +1,27 @@
-import { Resource } from './resource.js';
+import type { Identifiable, PipelineScoped, TeamScoped } from "./primitives.js";
+import type { Resource } from "./resource.js";
 
 /**
  * Represents a specific version of a Concourse resource.
  */
-export interface ResourceVersion {
-  /** The unique identifier for the resource version. */
-  id: number;
-  /** The version identifier (e.g., git commit hash, version number). */
-  version: { [key: string]: string }; // Structure depends on resource type
-  /** The metadata associated with this version. */
-  metadata?: { name: string, value: string }[];
-  /** The type of the resource. */
-  resource_type?: string; // May not always be present
-  /** Whether this version is enabled (can be used by builds). */
-  enabled: boolean;
-  /** The name of the resource this version belongs to. */
-  resource_name?: string; // Contextual, may not be in API response
-  /** The name of the pipeline this version belongs to. */
-  pipeline_name?: string; // Contextual
-  /** The name of the team this version belongs to. */
-  team_name?: string; // Contextual
+export interface ResourceVersion
+	extends Identifiable,
+		Partial<PipelineScoped>,
+		Partial<TeamScoped> {
+	// id inherited
+	// pipelineName?, teamName? inherited partially
 
-  // Maybe include the full resource details?
-  resource?: Resource; // Might be present in some API contexts
-} 
+	/** The version identifier (e.g., git commit hash, version number). */
+	version: { [key: string]: string }; // Structure depends on resource type
+	/** The metadata associated with this version. */
+	metadata?: { name: string; value: string }[];
+	/** The type of the resource. */
+	resourceType?: string; // Renamed from resource_type, may not always be present
+	/** Whether this version is enabled (can be used by builds). */
+	enabled: boolean;
+	/** The name of the resource this version belongs to. */
+	resourceName?: string; // Renamed from resource_name, contextual, may not be in API response
+
+	// Maybe include the full resource details?
+	resource?: Resource; // Might be present in some API contexts
+}

@@ -1,19 +1,39 @@
-import { expect } from 'chai'
+import { expect } from "chai";
 
-const throwsError = (Type, args) => (message) => {
-  expect(() => { new Type(args) }) // eslint-disable-line no-new
-    .to.throw(Error, message)
-}
+// Updated to accept errorType and use include for message check
+const throwsError = (Klass, args) => (expectedError) => {
+	let expectedType = Error; // Default to generic Error
+	let expectedMessageSubstring = expectedError;
 
-const withOptions = (Type) => (args) => {
-  return {
-    throwsError: throwsError(Type, args)
-  }
-}
+	// Allow passing { type: ErrorConstructor, message: string }
+	if (typeof expectedError === 'object' && expectedError !== null && expectedError.type && expectedError.message) {
+		expectedType = expectedError.type;
+		expectedMessageSubstring = expectedError.message;
+	}
 
-export const onConstructionOf = (Type) => {
-  return {
-    withEmptyOptions: () => withOptions(Type)({}),
-    withArguments: withOptions(Type)
-  }
-}
+	try {
+		new Klass(...args);
+	} catch (e) {
+		// Check the error type
+		expect(e).to.be.instanceOf(expectedType);
+		// Check if the message includes the expected substring
+		if (e instanceof Error) { // Type guard for message access
+			expect(e.message).to.include(expectedMessageSubstring);
+		}
+		return;
+	}
+	expect.fail(null, null, "Expected exception but none was thrown.");
+};
+
+const withArguments =
+	(Klass) =>
+	(...args) => {
+		return { throwsError: throwsError(Klass, args) };
+	};
+
+export const onConstructionOf = (Klass) => {
+	return {
+		withNoArguments: () => withArguments(Klass)(),
+		withArguments: withArguments(Klass),
+	};
+};

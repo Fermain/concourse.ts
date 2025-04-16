@@ -1,55 +1,64 @@
-import { buildResourcesUrl } from '../support/urls.js' // Assumes urls.ts exists, ADDED .js
-import { parseJson } from '../support/http/transformers.js' // Assumes transformers.ts exists, ADDED .js
-import camelcaseKeysDeep from 'camelcase-keys-deep' // Now has types
-import { Resource } from '../types/resource.js' // Assuming resource.ts exists in types, ADDED .js
-import ConcourseClient from '../Client.js' // Use default import, ADDED .js
-import { HttpClient } from '../support/http/factory.js' // Import from factory.js, ADDED .js
+import camelcaseKeysDeep from "camelcase-keys-deep"; // Now has types
+import { API_PATHS } from "../paths.js";
+import type { HttpClient } from "../support/http/factory.js"; // Import from factory.js, ADDED .js
+import { parseJson } from "../support/http/transformers.js"; // Assumes transformers.ts exists, ADDED .js
+import type { BuildClientOptions } from "../types/options.js";
 
-// Define constructor options interface
-interface BuildClientOptions {
-  apiUrl: string;
-  httpClient: HttpClient; // Use a specific type for the HTTP client
-  buildId: number;
-  // Add other potential options like teamName, pipelineName etc. if needed for context
-}
+// Define a basic type for the expected structure of build resources
+type BuildResourcesResponse = {
+	inputs: Array<Record<string, unknown>>;
+	outputs: Array<Record<string, unknown>>;
+};
 
 export default class BuildClient {
-  private apiUrl: string;
-  private httpClient: HttpClient;
-  private buildId: number;
+	private httpClient: HttpClient;
+	private buildId: number;
 
-  constructor (options: BuildClientOptions) {
-    // Basic validation can remain, but type checking handles most of it
-    if (!options.apiUrl) throw new Error('apiUrl is required');
-    if (!options.httpClient) throw new Error('httpClient is required');
-    if (options.buildId === undefined || options.buildId < 1) {
-      throw new Error('buildId must be a positive integer');
-    }
+	constructor(options: BuildClientOptions) {
+		// Validate httpClient type
+		if (!options.httpClient || typeof options.httpClient !== "function") {
+			// Assuming HttpClient is essentially the axios instance/function
+			throw new Error(
+				'Invalid parameter(s): ["httpClient" must be of type function].',
+			);
+		}
 
-    this.apiUrl = options.apiUrl;
-    this.httpClient = options.httpClient;
-    this.buildId = options.buildId;
-  }
+		// Validate buildId is a positive integer
+		if (
+			options.buildId === undefined ||
+			typeof options.buildId !== "number" ||
+			!Number.isInteger(options.buildId) || // Check for integer
+			options.buildId < 1
+		) {
+			throw new Error("buildId must be a positive integer");
+		}
 
-  /**
-   * Lists the resources involved in this build.
-   * Note: The Concourse API endpoint for build resources might be deprecated or changed.
-   * This method might need updating based on current API behavior.
-   * @returns {Promise<Resource[]>} A promise that resolves to an array of resources.
-   */
-  async listResources (): Promise<Resource[]> { // Return type uses Resource interface
-    // Ensure buildResourcesUrl is compatible and exists in urls.ts
-    const url = buildResourcesUrl(this.apiUrl, this.buildId);
+		this.httpClient = options.httpClient;
+		this.buildId = options.buildId;
+	}
 
-    // Assuming httpClient.get is typed correctly
-    const { data: resources } = await this.httpClient.get<any>( // Use generic for response data type
-      url,
-      // Assuming transformResponse is handled correctly by the httpClient implementation
-      { transformResponse: [parseJson, camelcaseKeysDeep] }
-    );
-
-    // The actual API response structure for build resources needs verification.
-    // This assumes it returns an array matching the Resource interface structure after transformation.
-    return resources as Resource[]; // Asserting the type for now
-  }
-} 
+	/**
+	 * Get resources used by the build (inputs and outputs).
+	 */
+	async getResources(): Promise<BuildResourcesResponse> {
+		// Use relative path
+		const path = API_PATHS.builds.resources(this.buildId);
+		try {
+			// Use the defined type instead of any
+			const { data: resources } =
+				// Use path instead of url
+				await this.httpClient.get<BuildResourcesResponse>(path, {
+					// Add transformers if needed, assuming API returns snake_case
+					transformResponse: [parseJson, camelcaseKeysDeep],
+				});
+			return resources;
+		} catch (error: unknown) {
+			// Enhance error handling (e.g., check for AxiosError)
+			console.error(
+				`Error fetching resources for build ${this.buildId}:`,
+				error,
+			);
+			throw error; // Re-throw after logging or wrap in a custom error
+		}
+	}
+}

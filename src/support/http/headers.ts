@@ -1,15 +1,15 @@
-import { Base64 } from 'js-base64'
+import { Base64 } from "js-base64";
 
 // Define header names as constants
-const AUTHORIZATION_HEADER = 'Authorization';
-const CSRF_TOKEN_HEADER = 'X-Csrf-Token';
-const CONTENT_TYPE_HEADER = 'Content-Type';
+const AUTHORIZATION_HEADER = "Authorization";
+const CSRF_TOKEN_HEADER = "X-Csrf-Token";
+const CONTENT_TYPE_HEADER = "Content-Type";
 
 /** Standard HTTP Content-Type values. */
 export const contentTypes = {
-  formUrlEncoded: 'application/x-www-form-urlencoded',
-  yaml: 'application/x-yaml',
-  json: 'application/json' // Add JSON content type
+	formUrlEncoded: "application/x-www-form-urlencoded",
+	yaml: "application/x-yaml",
+	json: "application/json", // Add JSON content type
 } as const; // Use 'as const' for stricter typing
 
 // Define a type for the header objects
@@ -18,13 +18,12 @@ export type HttpHeader = { [key: string]: string };
 // --- Helper Functions ---
 
 const basicAuthToken = (username: string, password?: string): string =>
-  Base64.encode(`${username}:${password || ''}`); // Handle potentially undefined password
+	Base64.encode(`${username}:${password || ""}`); // Handle potentially undefined password
 
 const basicAuthHeaderValue = (username: string, password?: string): string =>
-  `Basic ${basicAuthToken(username, password)}`;
+	`Basic ${basicAuthToken(username, password)}`;
 
-const bearerAuthHeaderValue = (token: string): string =>
-  `Bearer ${token}`;
+const bearerAuthHeaderValue = (token: string): string => `Bearer ${token}`;
 
 // --- Exported Header Builder Functions ---
 
@@ -34,8 +33,11 @@ const bearerAuthHeaderValue = (token: string): string =>
  * @param password The password (optional).
  * @returns An object representing the Basic Authorization header.
  */
-export const basicAuthorizationHeader = (username: string, password?: string): HttpHeader => ({
-  [AUTHORIZATION_HEADER]: basicAuthHeaderValue(username, password)
+export const basicAuthorizationHeader = (
+	username: string,
+	password?: string,
+): HttpHeader => ({
+	[AUTHORIZATION_HEADER]: basicAuthHeaderValue(username, password),
 });
 
 /**
@@ -44,7 +46,7 @@ export const basicAuthorizationHeader = (username: string, password?: string): H
  * @returns An object representing the Bearer Authorization header.
  */
 export const bearerAuthorizationHeader = (token: string): HttpHeader => ({
-  [AUTHORIZATION_HEADER]: bearerAuthHeaderValue(token)
+	[AUTHORIZATION_HEADER]: bearerAuthHeaderValue(token),
 });
 
 /**
@@ -53,7 +55,7 @@ export const bearerAuthorizationHeader = (token: string): HttpHeader => ({
  * @returns An object representing the X-Csrf-Token header.
  */
 export const csrfTokenHeader = (token: string): HttpHeader => ({
-  [CSRF_TOKEN_HEADER]: token
+	[CSRF_TOKEN_HEADER]: token,
 });
 
 /**
@@ -61,6 +63,8 @@ export const csrfTokenHeader = (token: string): HttpHeader => ({
  * @param contentType The content type value (e.g., contentTypes.json).
  * @returns An object representing the Content-Type header.
  */
-export const contentTypeHeader = (contentType: typeof contentTypes[keyof typeof contentTypes]): HttpHeader => ({
-  [CONTENT_TYPE_HEADER]: contentType
-}); 
+export const contentTypeHeader = (
+	contentType: (typeof contentTypes)[keyof typeof contentTypes],
+): HttpHeader => ({
+	[CONTENT_TYPE_HEADER]: contentType,
+});

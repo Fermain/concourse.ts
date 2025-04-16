@@ -1,40 +1,50 @@
-// Assuming support files are converted to TS
-import { workerPruneUrl } from '../support/urls.js'
-import { HttpClient } from '../support/http/factory.js'
+// Import API_PATHS
+import { API_PATHS } from "../paths.js";
+import type { HttpClient } from "../support/http/factory.js";
+
+// Import moved options
+import type { WorkerClientOptions } from "../types/options.js";
 
 // --- Type Definitions ---
 
-interface WorkerClientOptions {
-  apiUrl: string;
-  httpClient: HttpClient;
-  workerName: string;
-}
+// REMOVE_START
+// // Remove apiUrl from options
+// interface WorkerClientOptions {
+// 	httpClient: HttpClient;
+// 	workerName: string;
+// }
+// REMOVE_END
 
 // --- WorkerClient Class ---
 
 export default class WorkerClient {
-  private apiUrl: string;
-  private httpClient: HttpClient;
-  private workerName: string;
+	// Remove apiUrl property
+	// private apiUrl: string;
+	private httpClient: HttpClient;
+	private workerName: string;
 
-  constructor (options: WorkerClientOptions) {
-    if (!options.apiUrl) throw new Error('apiUrl is required');
-    if (!options.httpClient) throw new Error('httpClient is required');
-    if (!options.workerName) throw new Error('workerName is required');
+	constructor(options: WorkerClientOptions) {
+		// Validate httpClient
+		if (!options.httpClient || typeof options.httpClient !== "function") {
+			throw new Error(
+				'Invalid parameter(s): ["httpClient" must be of type function].',
+			);
+		}
+		// Validate workerName
+		if (!options.workerName || typeof options.workerName !== "string") {
+			throw new Error('Invalid parameter(s): ["workerName" must be a string].');
+		}
 
-    this.apiUrl = options.apiUrl;
-    this.httpClient = options.httpClient;
-    this.workerName = options.workerName;
-  }
+		this.httpClient = options.httpClient;
+		this.workerName = options.workerName;
+	}
 
-  /**
-   * Prunes the worker, causing it to land and stop accepting new work.
-   * @returns A promise that resolves when the prune request is sent.
-   */
-  async prune (): Promise<void> {
-    // The prune endpoint typically returns 204 No Content on success
-    await this.httpClient.put(
-      workerPruneUrl(this.apiUrl, this.workerName)
-    );
-  }
-} 
+	/**
+	 * Prunes the worker, causing it to land and stop accepting new work.
+	 * @returns A promise that resolves when the prune request is sent.
+	 */
+	async prune(): Promise<void> {
+		// Use relative path
+		await this.httpClient.put(API_PATHS.workers.prune(this.workerName));
+	}
+}

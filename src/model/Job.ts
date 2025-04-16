@@ -1,284 +1,356 @@
-import * as R from 'ramda'
-import { toInput, default as Input } from './Input.js'
-import { toOutput, default as Output } from './Output.js'
-import Build from './Build.js'
-import { Job as JobData } from '../types/job.js'
-import { Build as BuildData, BuildStatus } from '../types/build.js'
-import ConcourseClient from '../Client.js'
-import JobSet from './JobSet.js'
+import * as R from "ramda";
+import type ConcourseClient from "../Client.js";
+import type { Build as BuildData, BuildStatus } from "../types/build.js";
+import type { Job as JobData } from "../types/job.js";
+import Build from "./Build.js";
+import Input, { toInput } from "./Input.js";
+import type JobSet from "./JobSet.js";
+import Output, { toOutput } from "./Output.js";
 
 // --- Type Definitions ---
 
 interface JobLoadParams {
-  teamName: string;
-  pipelineName: string;
-  jobName: string;
-  client: ConcourseClient;
+	teamName: string;
+	pipelineName: string;
+	jobName: string;
+	client: ConcourseClient;
 }
 
 // Interface for constructor, mapping snake_case API to camelCase internal
-interface JobConstructorParams extends Omit<JobData, 'inputs' | 'outputs' | 'pipeline_name' | 'team_name' | 'next_build' | 'finished_build'> {
-  pipelineName: string;
-  teamName: string;
-  inputs?: Input[]; // Use the Input class instances
-  outputs?: Output[]; // Use the Output class instances
-  next_build?: BuildData | null; // Raw build data
-  finished_build?: BuildData | null; // Raw build data
-  client: ConcourseClient;
+interface JobConstructorParams
+	extends Omit<
+		JobData,
+		| "inputs"
+		| "outputs"
+		| "pipeline_name"
+		| "team_name"
+		| "next_build"
+		| "finished_build"
+	> {
+	pipelineName: string;
+	teamName: string;
+	// Accept either raw data or instantiated objects for flexibility
+	inputs?: JobData["inputs"] | Input[];
+	outputs?: JobData["outputs"] | Output[];
+	next_build?: BuildData | null; // Raw build data
+	finished_build?: BuildData | null; // Raw build data
+	client: ConcourseClient;
 }
 
 // --- Helper Function ---
 
 // Typed helper function
 const getJobsByNames = async (
-  jobNames: string[],
-  pipelineName: string,
-  teamName: string,
-  client: ConcourseClient
+	jobNames: string[],
+	pipelineName: string,
+	teamName: string,
+	client: ConcourseClient,
 ): Promise<Job[]> => {
-  const pipelineClient = client
-    .forTeam(teamName)
-    .forPipeline(pipelineName)
+	const pipelineClient = client.forTeam(teamName).forPipeline(pipelineName);
 
-  // Use Promise.all with map for concurrency
-  return Promise.all(
-    R.map(async (jobName: string): Promise<Job> => {
-      const jobData = await pipelineClient.getJob(jobName) // Assumes getJob returns JobData
-      // Map API response to constructor params
-      const constructorParams: JobConstructorParams = {
-        ...jobData,
-        pipelineName: jobData.pipeline_name,
-        teamName: jobData.team_name,
-        // Input/Output data needs transformation
-        inputs: (jobData.inputs || []).map(toInput(client)),
-        outputs: (jobData.outputs || []).map(toOutput(client)),
-        client
-      }
-      return new Job(constructorParams)
-    }, jobNames)
-  )
-}
+	// Use Promise.all with map for concurrency
+	return Promise.all(
+		R.map(async (jobName: string): Promise<Job> => {
+			const jobData = await pipelineClient.getJob(jobName); // Assumes getJob returns JobData
+			// Map API response to constructor params
+			const constructorParams: JobConstructorParams = {
+				...jobData,
+				pipelineName: jobData.pipelineName,
+				teamName: jobData.teamName,
+				// Raw data passed to constructor for transformation
+				inputs: jobData.inputs,
+				outputs: jobData.outputs,
+				next_build: jobData.nextBuild,
+				finished_build: jobData.finishedBuild,
+				client,
+			};
+			return new Job(constructorParams);
+		}, jobNames),
+	);
+};
 
 // --- Job Class ---
 
 export default class Job {
-  // Keep static load for now, but refactor API calls to client later ideally
-  static async load (params: JobLoadParams): Promise<Job> {
-    const { teamName, pipelineName, jobName, client } = params;
-    const jobData: JobData = await client
-      .forTeam(teamName)
-      .forPipeline(pipelineName)
-      .getJob(jobName)
+	// Keep static load for now, but refactor API calls to client later ideally
+	static async load(params: JobLoadParams): Promise<Job> {
+		const { teamName, pipelineName, jobName, client } = params;
+		const jobData: JobData = await client
+			.forTeam(teamName)
+			.forPipeline(pipelineName)
+			.getJob(jobName);
 
-    // Map API response to constructor params
-    const constructorParams: JobConstructorParams = {
-      ...jobData,
-      pipelineName: jobData.pipeline_name,
-      teamName: jobData.team_name,
-      inputs: (jobData.inputs || []).map(toInput(client)),
-      outputs: (jobData.outputs || []).map(toOutput(client)),
-      // Pass raw build data for constructor to handle
-      next_build: jobData.next_build,
-      finished_build: jobData.finished_build,
-      client
-    }
-    return new Job(constructorParams)
-  }
+		// Map API response to constructor params
+		const constructorParams: JobConstructorParams = {
+			...jobData,
+			pipelineName: jobData.pipelineName,
+			teamName: jobData.teamName,
+			// Raw data passed to constructor for transformation
+			inputs: jobData.inputs,
+			outputs: jobData.outputs,
+			next_build: jobData.nextBuild,
+			finished_build: jobData.finishedBuild,
+			client,
+		};
+		return new Job(constructorParams);
+	}
 
-  // Class Properties (using camelCase)
-  id: number;
-  name: string;
-  pipelineName: string;
-  teamName: string;
-  inputs: Input[];
-  outputs: Output[];
-  groups: string[];
-  nextBuild?: Build | null; // Use Build class instance
-  finishedBuild?: Build | null; // Use Build class instance
-  paused?: boolean;
-  apiUrl?: string;
-  url?: string;
-  private client: ConcourseClient;
+	// Class Properties (using camelCase)
+	id: number;
+	name: string;
+	pipelineName: string;
+	teamName: string;
+	inputs: Input[];
+	outputs: Output[];
+	groups: string[];
+	nextBuild?: Build | null; // Use Build class instance
+	finishedBuild?: Build | null; // Use Build class instance
+	paused?: boolean;
+	apiUrl?: string;
+	url?: string;
+	private client: ConcourseClient;
 
-  constructor (params: JobConstructorParams) {
-    if (params.id === undefined) throw new Error('Job ID is required');
-    if (!params.name) throw new Error('Job name is required');
-    if (!params.pipelineName) throw new Error('Job pipeline name is required');
-    if (!params.teamName) throw new Error('Job team name is required');
+	constructor(params: JobConstructorParams) {
+		if (params.id === undefined) throw new Error("Job ID is required");
+		if (!params.name) throw new Error("Job name is required");
+		if (!params.pipelineName) throw new Error("Job pipeline name is required");
+		if (!params.teamName) throw new Error("Job team name is required");
+		if (!params.client) throw new Error("Client is required for Job model");
 
-    this.id = params.id;
-    this.name = params.name;
-    this.pipelineName = params.pipelineName;
-    this.teamName = params.teamName;
-    this.inputs = params.inputs || []; // Already transformed in static load/helper
-    this.outputs = params.outputs || []; // Already transformed in static load/helper
-    this.groups = params.groups || [];
-    this.paused = params.paused;
-    this.apiUrl = params.api_url;
-    this.url = params.url;
-    this.client = params.client;
+		this.id = params.id;
+		this.name = params.name;
+		this.pipelineName = params.pipelineName;
+		this.teamName = params.teamName;
+		this.groups = params.groups || [];
+		this.paused = params.paused;
+		this.apiUrl = params.apiUrl;
+		this.url = params.url;
+		this.client = params.client;
 
-    // Instantiate Build objects from raw data
-    this.nextBuild = params.next_build ? new Build({ ...params.next_build, client: this.client, teamName: this.teamName, pipelineName: this.pipelineName }) : null;
-    this.finishedBuild = params.finished_build ? new Build({ ...params.finished_build, client: this.client, teamName: this.teamName, pipelineName: this.pipelineName }) : null;
-  }
+		// Ensure inputs/outputs are instantiated Input/Output objects
+		this.inputs = (params.inputs || []).map((input) =>
+			input instanceof Input ? input : toInput(this.client)(input),
+		);
+		this.outputs = (params.outputs || []).map((output) =>
+			output instanceof Output ? output : toOutput(this.client)(output),
+		);
 
-  // --- Getters ---
-  getId (): number { return this.id; }
-  getName (): string { return this.name; }
-  getPipelineName (): string { return this.pipelineName; }
-  getTeamName (): string { return this.teamName; }
-  getInputs (): Input[] { return this.inputs; }
-  getOutputs (): Output[] { return this.outputs; }
-  getGroups (): string[] { return this.groups; }
-  getNextBuild (): Build | null | undefined { return this.nextBuild; }
-  getFinishedBuild (): Build | null | undefined { return this.finishedBuild; }
-  isPaused(): boolean | undefined { return this.paused; }
+		// Instantiate Build objects from raw data
+		this.nextBuild = params.next_build
+			? new Build({
+					...params.next_build,
+					client: this.client,
+					teamName: this.teamName,
+					pipelineName: this.pipelineName,
+				})
+			: null;
+		this.finishedBuild = params.finished_build
+			? new Build({
+					...params.finished_build,
+					client: this.client,
+					teamName: this.teamName,
+					pipelineName: this.pipelineName,
+				})
+			: null;
+	}
 
-  // --- Input/Output Helpers ---
-  getInputForResource (resourceName: string): Input | undefined {
-    return R.find(R.propEq(resourceName, 'resource'), this.inputs);
-  }
+	// --- Getters ---
+	getId(): number {
+		return this.id;
+	}
+	getName(): string {
+		return this.name;
+	}
+	getPipelineName(): string {
+		return this.pipelineName;
+	}
+	getTeamName(): string {
+		return this.teamName;
+	}
+	getInputs(): Input[] {
+		return this.inputs;
+	}
+	getOutputs(): Output[] {
+		return this.outputs;
+	}
+	getGroups(): string[] {
+		return this.groups;
+	}
+	getNextBuild(): Build | null | undefined {
+		return this.nextBuild;
+	}
+	getFinishedBuild(): Build | null | undefined {
+		return this.finishedBuild;
+	}
+	isPaused(): boolean | undefined {
+		return this.paused;
+	}
 
-  getOutputForResource (resourceName: string): Output | undefined {
-    return R.find(R.propEq(resourceName, 'resource'), this.outputs);
-  }
+	// --- Input/Output Helpers ---
+	getInputForResource(resourceName: string): Input | undefined {
+		return R.find(R.propEq(resourceName, "resource"), this.inputs);
+	}
 
-  // --- Dependency Logic ---
-  hasDependencyJobs (): boolean {
-    return R.any(input => input.requiresAnyJobsToHavePassed(), this.inputs);
-  }
+	getOutputForResource(resourceName: string): Output | undefined {
+		return R.find(R.propEq(resourceName, "resource"), this.outputs);
+	}
 
-  async getDependencyJobs (): Promise<Job[]> {
-    const dependencyJobNames =
-      R.uniq(R.flatten(R.map(
-        input => input.getNamesOfJobsToHavePassed(),
-        this.inputs)));
+	// --- Dependency Logic ---
+	hasDependencyJobs(): boolean {
+		return R.any((input) => input.requiresAnyJobsToHavePassed(), this.inputs);
+	}
 
-    if (R.isEmpty(dependencyJobNames)) {
-      return [];
-    }
+	async getDependencyJobs(): Promise<Job[]> {
+		const dependencyJobNames = R.uniq(
+			R.flatten(
+				R.map((input) => input.getNamesOfJobsToHavePassed(), this.inputs),
+			),
+		);
 
-    return getJobsByNames(
-      dependencyJobNames,
-      this.pipelineName,
-      this.teamName,
-      this.client);
-  }
+		if (R.isEmpty(dependencyJobNames)) {
+			return [];
+		}
 
-  async getDependencyJobsFor (resourceName: string): Promise<Job[]> {
-    const input = this.getInputForResource(resourceName);
-    if (!input) {
-      throw new Error(`No input found for resource name: ${resourceName}`);
-    }
+		return getJobsByNames(
+			dependencyJobNames,
+			this.pipelineName,
+			this.teamName,
+			this.client,
+		);
+	}
 
-    const dependencyJobNames = input.getNamesOfJobsToHavePassed();
-    if (R.isEmpty(dependencyJobNames)) {
-      return [];
-    }
+	async getDependencyJobsFor(resourceName: string): Promise<Job[]> {
+		const input = this.getInputForResource(resourceName);
+		if (!input) {
+			throw new Error(`No input found for resource name: ${resourceName}`);
+		}
 
-    return getJobsByNames(
-      dependencyJobNames,
-      this.pipelineName,
-      this.teamName,
-      this.client);
-  }
+		const dependencyJobNames = input.getNamesOfJobsToHavePassed();
+		if (R.isEmpty(dependencyJobNames)) {
+			return [];
+		}
 
-  // Assuming JobSet is converted to TypeScript and has getJobsByInputResource method
-  hasDependentJobsIn (jobSet: JobSet): boolean {
-    const jobsByInputResource = jobSet.getJobsByInputResource(); // This method needs definition in JobSet.ts
+		return getJobsByNames(
+			dependencyJobNames,
+			this.pipelineName,
+			this.teamName,
+			this.client,
+		);
+	}
 
-    return R.any(
-      output => {
-        const jobsForOutputResource: Job[] =
-          R.pathOr([], [output.getResourceName()], jobsByInputResource);
-        const jobsDependingOnThis =
-          R.filter(
-            job => {
-              const inputForResource = job.getInputForResource(output.getResourceName());
-              return inputForResource ? inputForResource.requiresJobToHavePassed(this.name) : false;
-            },
-            jobsForOutputResource);
-        return !R.isEmpty(jobsDependingOnThis);
-      },
-      this.outputs);
-  }
+	// Assuming JobSet is converted to TypeScript and has getJobsByInputResource method
+	hasDependentJobsIn(jobSet: JobSet): boolean {
+		const jobsByInputResource = jobSet.getJobsByInputResource(); // This method needs definition in JobSet.ts
 
-  // --- Status/Trigger Logic ---
-  isAutomatic (): boolean {
-    return R.any(input => input.isTrigger(), this.inputs);
-  }
+		return R.any((output) => {
+			const jobsForOutputResource: Job[] = R.pathOr(
+				[],
+				[output.getResourceName()],
+				jobsByInputResource,
+			);
+			const jobsDependingOnThis = R.filter((job) => {
+				const inputForResource = job.getInputForResource(
+					output.getResourceName(),
+				);
+				return inputForResource
+					? inputForResource.requiresJobToHavePassed(this.name)
+					: false;
+			}, jobsForOutputResource);
+			return !R.isEmpty(jobsDependingOnThis);
+		}, this.outputs);
+	}
 
-  isManual (): boolean {
-    return R.none(input => input.isTrigger(), this.inputs);
-  }
+	// --- Status/Trigger Logic ---
+	isAutomatic(): boolean {
+		return R.any((input) => input.isTrigger(), this.inputs);
+	}
 
-  // --- Build Fetching Logic ---
-  async getLatestBuild (): Promise<Build | null> {
-    const buildsData: BuildData[] = await this.client
-      .forTeam(this.teamName)
-      .forPipeline(this.pipelineName)
-      .forJob(this.name) // Assuming job scope is available on pipeline client
-      .listBuilds(); // REMOVED options { limit: 1 }
+	isManual(): boolean {
+		return R.none((input) => input.isTrigger(), this.inputs);
+	}
 
-    if (R.isEmpty(buildsData)) {
-      return null;
-    }
-    const buildData = buildsData[0];
-    // Pass necessary context for Build constructor
-    return new Build({ ...buildData, client: this.client, teamName: this.teamName, pipelineName: this.pipelineName });
-  }
+	// --- Build Fetching Logic ---
+	async getLatestBuild(): Promise<Build | null> {
+		const buildsData: BuildData[] = await this.client
+			.forTeam(this.teamName)
+			.forPipeline(this.pipelineName)
+			.forJob(this.name) // Assuming job scope is available on pipeline client
+			.listBuilds(); // REMOVED options { limit: 1 }
 
-  // This logic seems complex and might be better placed in the client or a dedicated service
-  async getLatestBuildWithStatus (status: BuildStatus): Promise<Build | null> {
-    const pipelineJobClient = this.client
-      .forTeam(this.teamName)
-      .forPipeline(this.pipelineName)
-      .forJob(this.name); // Assuming job scope
+		if (R.isEmpty(buildsData)) {
+			return null;
+		}
+		const buildData = buildsData[0];
+		// Pass necessary context for Build constructor
+		return new Build({
+			...buildData,
+			client: this.client,
+			teamName: this.teamName,
+			pipelineName: this.pipelineName,
+		});
+	}
 
-    let buildsData: BuildData[];
-    let lastBuildId: number | undefined;
-    const buildsPerCall = 10;
+	// This logic seems complex and might be better placed in the client or a dedicated service
+	async getLatestBuildWithStatus(status: BuildStatus): Promise<Build | null> {
+		const pipelineJobClient = this.client
+			.forTeam(this.teamName)
+			.forPipeline(this.pipelineName)
+			.forJob(this.name); // Assuming job scope
 
-    do {
-      const options = lastBuildId
-        ? { limit: buildsPerCall, since: lastBuildId }
-        : { limit: buildsPerCall };
+		let buildsData: BuildData[];
+		let lastBuildId: number | undefined;
+		const buildsPerCall = 10;
 
-      // Assuming listBuilds accepts options and returns BuildData[] - THIS IS WRONG
-      // The job-specific listBuilds doesn't take options like limit/since
-      buildsData = await pipelineJobClient.listBuilds(/* REMOVED options */);
+		do {
+			const options = lastBuildId
+				? { limit: buildsPerCall, since: lastBuildId }
+				: { limit: buildsPerCall };
 
-      const buildData = R.find(R.propEq(status, 'status'), buildsData);
+			// Assuming listBuilds accepts options and returns BuildData[] - THIS IS WRONG
+			// The job-specific listBuilds doesn't take options like limit/since
+			buildsData = await pipelineJobClient.listBuilds(/* REMOVED options */);
 
-      if (!R.isNil(buildData)) {
-        // Pass necessary context for Build constructor
-        return new Build({ ...buildData, client: this.client, teamName: this.teamName, pipelineName: this.pipelineName });
-      }
+			const buildData = R.find(R.propEq(status, "status"), buildsData);
 
-      if (R.isEmpty(buildsData)) {
-        return null;
-      }
+			if (!R.isNil(buildData)) {
+				// Pass necessary context for Build constructor
+				return new Build({
+					...buildData,
+					client: this.client,
+					teamName: this.teamName,
+					pipelineName: this.pipelineName,
+				});
+			}
 
-      lastBuildId = R.last(buildsData)?.id;
-    } while (buildsData.length === buildsPerCall && lastBuildId !== undefined);
+			if (R.isEmpty(buildsData)) {
+				return null;
+			}
 
-    return null;
-  }
+			lastBuildId = R.last(buildsData)?.id;
+		} while (buildsData.length === buildsPerCall && lastBuildId !== undefined);
+
+		return null;
+	}
 }
 
 // Add the toJob factory function
-export const toJob = (client: ConcourseClient) => (jobData: JobData): Job => {
-  // Map API response to constructor params
-  const constructorParams: JobConstructorParams = {
-    ...jobData,
-    pipelineName: jobData.pipeline_name,
-    teamName: jobData.team_name,
-    inputs: (jobData.inputs || []).map(toInput(client)),
-    outputs: (jobData.outputs || []).map(toOutput(client)),
-    next_build: jobData.next_build,
-    finished_build: jobData.finished_build,
-    client
-  }
-  return new Job(constructorParams)
-} 
+export const toJob =
+	(client: ConcourseClient) =>
+	(jobData: JobData): Job => {
+		// Map API response to constructor params
+		const constructorParams: JobConstructorParams = {
+			...jobData,
+			pipelineName: jobData.pipelineName,
+			teamName: jobData.teamName,
+			inputs: (jobData.inputs || []).map((input) =>
+				input instanceof Input ? input : toInput(client)(input),
+			),
+			outputs: (jobData.outputs || []).map((output) =>
+				output instanceof Output ? output : toOutput(client)(output),
+			),
+			nextBuild: jobData.nextBuild,
+			finishedBuild: jobData.finishedBuild,
+			client,
+		};
+		return new Job(constructorParams);
+	};
