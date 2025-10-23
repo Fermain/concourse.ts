@@ -44,24 +44,36 @@ import {
 	allTeamsUrl,
 	allWorkersUrl,
 	apiUrl,
+	buildResourcesUrl,
 	buildUrl,
 	infoUrl,
 	teamBuildsUrl,
 	teamPipelineBuildsUrl,
 	teamPipelineConfigUrl,
+	teamPipelineJobBuildUrl,
 	teamPipelineJobBuildsUrl,
+	teamPipelineJobInputsUrl,
+	teamPipelineJobPauseUrl,
+	teamPipelineJobUnpauseUrl,
 	teamPipelineJobUrl,
 	teamPipelineJobsUrl,
 	teamPipelinePauseUrl,
 	teamPipelineRenameUrl,
 	teamPipelineResourceCheckUrl,
+	teamPipelineResourcePauseUrl,
 	teamPipelineResourceTypesUrl,
+	teamPipelineResourceUnpauseUrl,
 	teamPipelineResourceUrl,
+	teamPipelineResourceVersionCausalityUrl,
+	teamPipelineResourceVersionInputToUrl,
+	teamPipelineResourceVersionOutputOfUrl,
+	teamPipelineResourceVersionUrl,
 	teamPipelineResourceVersionsUrl,
 	teamPipelineResourcesUrl,
 	teamPipelineUnpauseUrl,
 	userUrl,
 	usersUrl,
+	workerPruneUrl,
 } from "./urls";
 
 // Placeholder for ATC types - we will define these properly later
@@ -212,7 +224,7 @@ export class ConcourseClient {
 						// This should theoretically not happen if the schema is void/null/undefined
 						throw new ConcourseError(
 							"Failed to parse expected empty response",
-							response,
+							undefined,
 							validationResult.error,
 						);
 					}
@@ -221,7 +233,7 @@ export class ConcourseClient {
 				// If the schema was not null/void/undefined, throw because the empty response is unexpected.
 				throw new ConcourseError(
 					"API returned unexpected empty response for non-empty schema",
-					response,
+					undefined,
 				);
 			}
 
@@ -232,7 +244,7 @@ export class ConcourseClient {
 				console.error("Zod Validation Error:", validationResult.error.errors);
 				throw new ConcourseError(
 					`API response validation failed: ${validationResult.error.message}`,
-					response,
+					undefined,
 					validationResult.error,
 				);
 			}
@@ -331,6 +343,181 @@ export class ConcourseClient {
 				const base = teamPipelineBuildsUrl(baseApi, teamName, pipelineName);
 				const url = params.toString() ? `${base}?${params.toString()}` : base;
 				return this.request(url, AtcBuildArraySchema);
+			},
+		};
+	}
+
+	forJob(teamName: string, pipelineName: string, jobName: string) {
+		const baseApi = apiUrl(this.baseUrl);
+		return {
+			pause: async (): Promise<void> => {
+				await this.request(
+					teamPipelineJobPauseUrl(baseApi, teamName, pipelineName, jobName),
+					z.void(),
+					{ method: "PUT" },
+				);
+			},
+			unpause: async (): Promise<void> => {
+				await this.request(
+					teamPipelineJobUnpauseUrl(baseApi, teamName, pipelineName, jobName),
+					z.void(),
+					{ method: "PUT" },
+				);
+			},
+			listBuilds: async (): Promise<AtcBuild[]> =>
+				this.request(
+					teamPipelineJobBuildsUrl(baseApi, teamName, pipelineName, jobName),
+					AtcBuildArraySchema,
+				),
+			getBuild: async (buildName: string): Promise<AtcBuild> =>
+				this.request(
+					teamPipelineJobBuildUrl(
+						baseApi,
+						teamName,
+						pipelineName,
+						jobName,
+						buildName,
+					),
+					AtcBuildSchema,
+				),
+			createBuild: async (): Promise<AtcBuildSummary> =>
+				this.request(
+					teamPipelineJobBuildsUrl(baseApi, teamName, pipelineName, jobName),
+					AtcBuildSummarySchema,
+					{ method: "POST" },
+				),
+			listInputs: async (): Promise<unknown[]> =>
+				this.request(
+					teamPipelineJobInputsUrl(baseApi, teamName, pipelineName, jobName),
+					z.array(z.unknown()),
+				),
+		};
+	}
+
+	forResource(teamName: string, pipelineName: string, resourceName: string) {
+		const baseApi = apiUrl(this.baseUrl);
+		return {
+			pause: async (): Promise<void> => {
+				await this.request(
+					teamPipelineResourcePauseUrl(
+						baseApi,
+						teamName,
+						pipelineName,
+						resourceName,
+					),
+					z.void(),
+					{ method: "PUT" },
+				);
+			},
+			unpause: async (): Promise<void> => {
+				await this.request(
+					teamPipelineResourceUnpauseUrl(
+						baseApi,
+						teamName,
+						pipelineName,
+						resourceName,
+					),
+					z.void(),
+					{ method: "PUT" },
+				);
+			},
+			listVersions: async (page?: Page): Promise<AtcResourceVersion[]> => {
+				const params = new URLSearchParams();
+				if (page?.limit) params.set("limit", String(page.limit));
+				if (page?.since) params.set("since", String(page.since));
+				if (page?.until) params.set("until", String(page.until));
+				const base = teamPipelineResourceVersionsUrl(
+					baseApi,
+					teamName,
+					pipelineName,
+					resourceName,
+				);
+				const url = params.toString() ? `${base}?${params.toString()}` : base;
+				return this.request(url, AtcResourceVersionArraySchema);
+			},
+			getVersion: async (versionId: number): Promise<AtcResourceVersion> =>
+				this.request(
+					teamPipelineResourceVersionUrl(
+						baseApi,
+						teamName,
+						pipelineName,
+						resourceName,
+						versionId,
+					),
+					z.any() as unknown as typeof AtcResourceVersionArraySchema.element,
+				),
+			forVersion: (versionId: number) =>
+				this.forResourceVersion(
+					teamName,
+					pipelineName,
+					resourceName,
+					versionId,
+				),
+		};
+	}
+
+	forResourceVersion(
+		teamName: string,
+		pipelineName: string,
+		resourceName: string,
+		versionId: number,
+	) {
+		const baseApi = apiUrl(this.baseUrl);
+		return {
+			getCausality: async (): Promise<unknown> =>
+				this.request(
+					teamPipelineResourceVersionCausalityUrl(
+						baseApi,
+						teamName,
+						pipelineName,
+						resourceName,
+						versionId,
+					),
+					z.unknown(),
+				),
+			listBuildsWithVersionAsInput: async (): Promise<AtcBuild[]> =>
+				this.request(
+					teamPipelineResourceVersionInputToUrl(
+						baseApi,
+						teamName,
+						pipelineName,
+						resourceName,
+						versionId,
+					),
+					AtcBuildArraySchema,
+				),
+			listBuildsWithVersionAsOutput: async (): Promise<AtcBuild[]> =>
+				this.request(
+					teamPipelineResourceVersionOutputOfUrl(
+						baseApi,
+						teamName,
+						pipelineName,
+						resourceName,
+						versionId,
+					),
+					AtcBuildArraySchema,
+				),
+		};
+	}
+
+	forBuild(buildId: number | string) {
+		const baseApi = apiUrl(this.baseUrl);
+		return {
+			listResources: async (): Promise<AtcResource[]> =>
+				this.request(
+					buildResourcesUrl(baseApi, buildId),
+					AtcResourceArraySchema,
+				),
+		};
+	}
+
+	forWorker(workerName: string) {
+		const baseApi = apiUrl(this.baseUrl);
+		return {
+			prune: async (): Promise<void> => {
+				await this.request(workerPruneUrl(baseApi, workerName), z.void(), {
+					method: "PUT",
+				});
 			},
 		};
 	}

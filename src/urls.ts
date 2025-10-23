@@ -67,6 +67,39 @@ export const teamPipelineJobBuildsUrl = (
 ): string =>
 	`${teamPipelineJobUrl(api, teamName, pipelineName, jobName)}/builds`;
 
+export const teamPipelineJobPauseUrl = (
+	api: string,
+	teamName: string,
+	pipelineName: string,
+	jobName: string,
+): string =>
+	`${teamPipelineJobUrl(api, teamName, pipelineName, jobName)}/pause`;
+
+export const teamPipelineJobUnpauseUrl = (
+	api: string,
+	teamName: string,
+	pipelineName: string,
+	jobName: string,
+): string =>
+	`${teamPipelineJobUrl(api, teamName, pipelineName, jobName)}/unpause`;
+
+export const teamPipelineJobBuildUrl = (
+	api: string,
+	teamName: string,
+	pipelineName: string,
+	jobName: string,
+	buildName: string,
+): string =>
+	`${teamPipelineJobBuildsUrl(api, teamName, pipelineName, jobName)}/${encodeURIComponent(buildName)}`;
+
+export const teamPipelineJobInputsUrl = (
+	api: string,
+	teamName: string,
+	pipelineName: string,
+	jobName: string,
+): string =>
+	`${teamPipelineJobUrl(api, teamName, pipelineName, jobName)}/inputs`;
+
 export const teamPipelineResourcesUrl = (
 	api: string,
 	teamName: string,
@@ -91,6 +124,15 @@ export const teamPipelineResourceVersionsUrl = (
 	resourceName: string,
 ): string =>
 	`${teamPipelineResourceUrl(api, teamName, pipelineName, resourceName)}/versions`;
+
+export const teamPipelineResourceVersionUrl = (
+	api: string,
+	teamName: string,
+	pipelineName: string,
+	resourceName: string,
+	versionId: number,
+): string =>
+	`${teamPipelineResourceVersionsUrl(api, teamName, pipelineName, resourceName)}/${versionId}`;
 export const teamPipelineResourceCheckUrl = (
 	api: string,
 	teamName: string,
@@ -98,6 +140,22 @@ export const teamPipelineResourceCheckUrl = (
 	resourceName: string,
 ): string =>
 	`${teamPipelineResourceUrl(api, teamName, pipelineName, resourceName)}/check`;
+
+export const teamPipelineResourcePauseUrl = (
+	api: string,
+	teamName: string,
+	pipelineName: string,
+	resourceName: string,
+): string =>
+	`${teamPipelineResourceUrl(api, teamName, pipelineName, resourceName)}/pause`;
+
+export const teamPipelineResourceUnpauseUrl = (
+	api: string,
+	teamName: string,
+	pipelineName: string,
+	resourceName: string,
+): string =>
+	`${teamPipelineResourceUrl(api, teamName, pipelineName, resourceName)}/unpause`;
 
 export const userUrl = (api: string): string => `${api}/user`;
 export const usersUrl = (api: string): string => `${api}/users`;
@@ -113,3 +171,38 @@ export const teamPipelineBuildsUrl = (
 
 export const teamRenameUrl = (api: string, teamName: string): string =>
 	`${teamUrl(api, teamName)}/rename`;
+
+export const teamPipelineResourceVersionCausalityUrl = (
+	api: string,
+	teamName: string,
+	pipelineName: string,
+	resourceName: string,
+	versionId: number,
+): string =>
+	`${teamPipelineResourceVersionUrl(api, teamName, pipelineName, resourceName, versionId)}/causality`;
+
+export const teamPipelineResourceVersionInputToUrl = (
+	api: string,
+	teamName: string,
+	pipelineName: string,
+	resourceName: string,
+	versionId: number,
+): string =>
+	`${teamPipelineResourceVersionUrl(api, teamName, pipelineName, resourceName, versionId)}/input_to`;
+
+export const teamPipelineResourceVersionOutputOfUrl = (
+	api: string,
+	teamName: string,
+	pipelineName: string,
+	resourceName: string,
+	versionId: number,
+): string =>
+	`${teamPipelineResourceVersionUrl(api, teamName, pipelineName, resourceName, versionId)}/output_of`;
+
+export const buildResourcesUrl = (
+	api: string,
+	buildId: number | string,
+): string => `${api}/builds/${buildId}/resources`;
+
+export const workerPruneUrl = (api: string, workerName: string): string =>
+	`${api}/workers/${encodeURIComponent(workerName)}/prune`;
