@@ -2,13 +2,16 @@
 	"name": "concourse.ts",
 	"version": "1.0.0",
 	"description": "",
-	"main": "index.js",
+	"main": "./dist/index.cjs",
+	"types": "./dist/index.d.ts",
 	"scripts": {
+		"build": "tsc && node ./scripts/build.mjs",
 		"test": "echo \"Error: no test specified\" && exit 1",
 		"lint": "biome check --write ./src",
 		"format": "biome format --write ./src ./docs",
 		"prepare": "husky",
-		"check": "biome check ./src ./docs"
+		"check": "biome check ./src ./docs",
+		"prepublishOnly": "npm run lint && npm run build"
 	},
 	"keywords": [],
 	"author": "",

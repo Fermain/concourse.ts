@@ -1,5 +1,5 @@
 import { z } from "zod"; // Import z itself
-import { ConcourseApiError, ConcourseValidationError } from "./errors"; // Import custom API error and validation error
+import { ConcourseError } from "./errors";
 // No need to import fetch, it's globally available
 import type {
 	AtcBuild,
@@ -37,6 +37,27 @@ import {
 	AtcUserSchema, // Needed for listActiveUsersSince
 	AtcWorkerArraySchema,
 } from "./types/atc.schemas"; // Import Zod schemas
+import {
+	allBuildsUrl,
+	allJobsUrl,
+	allPipelinesUrl,
+	allTeamsUrl,
+	allWorkersUrl,
+	apiUrl,
+	buildUrl,
+	infoUrl,
+	teamPipelineConfigUrl,
+	teamPipelineJobBuildsUrl,
+	teamPipelineJobUrl,
+	teamPipelineJobsUrl,
+	teamPipelineResourceCheckUrl,
+	teamPipelineResourceTypesUrl,
+	teamPipelineResourceUrl,
+	teamPipelineResourceVersionsUrl,
+	teamPipelineResourcesUrl,
+	userUrl,
+	usersUrl,
+} from "./urls";
 
 // Placeholder for ATC types - we will define these properly later
 // AtcPipeline removed, imported specifically
@@ -59,16 +80,7 @@ interface ConcourseClientOptions {
 /**
  * Error thrown when API requests fail or validation errors occur.
  */
-export class ConcourseError extends Error {
-	constructor(
-		message: string,
-		public readonly response?: Response,
-		public readonly cause?: unknown,
-	) {
-		super(message);
-		this.name = "ConcourseError";
-	}
-}
+// Use shared ConcourseError from errors.ts
 
 /**
  * A TypeScript client for interacting with the Concourse ATC API.
@@ -133,11 +145,11 @@ export class ConcourseClient {
 	 * @throws {ConcourseError} If the request fails or validation fails.
 	 */
 	private async request<T extends z.ZodTypeAny>(
-		path: string,
+		url: string,
 		schema: T,
 		options: RequestInit = {},
 	): Promise<z.infer<T>> {
-		const url = `${this.baseUrl}${path}`;
+		const urlWithBase = url.startsWith("http") ? url : `${this.baseUrl}${url}`;
 		const headers = new Headers(options.headers);
 
 		// Add Authorization header based on configured method
@@ -160,7 +172,7 @@ export class ConcourseClient {
 		}
 
 		try {
-			const response = await fetch(url, {
+			const response = await fetch(urlWithBase, {
 				...options,
 				headers,
 			});
@@ -226,8 +238,8 @@ export class ConcourseClient {
 				throw error; // Re-throw known errors
 			}
 			throw new ConcourseError(
-				`Network or unexpected error during API request to ${url}: ${error instanceof Error ? error.message : String(error)}`,
-				undefined, // No response object available here
+				`Network or unexpected error during API request to ${urlWithBase}: ${error instanceof Error ? error.message : String(error)}`,
+				undefined,
 				error,
 			);
 		}
@@ -242,12 +254,15 @@ export class ConcourseClient {
 	 * @returns {Promise<AtcInfo>} Information about the ATC version, worker version, etc.
 	 */
 	async getInfo(): Promise<AtcInfo> {
-		return this.request("/api/v1/info", AtcInfoSchema);
+		return this.request(infoUrl(apiUrl(this.baseUrl)), AtcInfoSchema);
 	}
 
 	// --- Pipelines ---
 	async listPipelines(): Promise<AtcPipeline[]> {
-		return this.request("/api/v1/pipelines", AtcPipelineArraySchema);
+		return this.request(
+			allPipelinesUrl(apiUrl(this.baseUrl)),
+			AtcPipelineArraySchema,
+		);
 	}
 
 	/**
@@ -258,18 +273,20 @@ export class ConcourseClient {
 		teamName: string,
 		pipelineName: string,
 	): Promise<AtcConfig> {
-		const path = `/api/v1/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/config`;
-		return this.request(path, AtcConfigSchema);
+		return this.request(
+			teamPipelineConfigUrl(apiUrl(this.baseUrl), teamName, pipelineName),
+			AtcConfigSchema,
+		);
 	}
 
 	// --- Teams ---
 	async listTeams(): Promise<AtcTeam[]> {
-		return this.request("/api/v1/teams", AtcTeamArraySchema);
+		return this.request(allTeamsUrl(apiUrl(this.baseUrl)), AtcTeamArraySchema);
 	}
 
 	// --- Jobs ---
 	async listAllJobs(): Promise<AtcJob[]> {
-		return this.request("/api/v1/jobs", AtcJobArraySchema);
+		return this.request(allJobsUrl(apiUrl(this.baseUrl)), AtcJobArraySchema);
 	}
 
 	/**
@@ -281,8 +298,10 @@ export class ConcourseClient {
 		pipelineName: string,
 		jobName: string,
 	): Promise<AtcJob> {
-		const path = `/api/v1/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/jobs/${encodeURIComponent(jobName)}`;
-		return this.request(path, AtcJobSchema);
+		return this.request(
+			teamPipelineJobUrl(apiUrl(this.baseUrl), teamName, pipelineName, jobName),
+			AtcJobSchema,
+		);
 	}
 
 	/**
@@ -299,10 +318,14 @@ export class ConcourseClient {
 		if (page?.limit) params.set("limit", String(page.limit));
 		if (page?.since) params.set("since", String(page.since));
 		if (page?.until) params.set("until", String(page.until));
-		const query = params.toString() ? `?${params.toString()}` : "";
-		const path = `/api/v1/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/jobs/${encodeURIComponent(jobName)}/builds${query}`;
-		// TODO: Handle Link header for pagination
-		return this.request(path, AtcBuildArraySchema);
+		const base = teamPipelineJobBuildsUrl(
+			apiUrl(this.baseUrl),
+			teamName,
+			pipelineName,
+			jobName,
+		);
+		const url = params.toString() ? `${base}?${params.toString()}` : base;
+		return this.request(url, AtcBuildArraySchema);
 	}
 
 	// --- Builds --- //
@@ -311,8 +334,10 @@ export class ConcourseClient {
 	 * GET /api/v1/builds/{buildId}
 	 */
 	async getBuild(buildId: string | number): Promise<AtcBuild> {
-		const path = `/api/v1/builds/${buildId}`;
-		return this.request(path, AtcBuildSchema);
+		return this.request(
+			buildUrl(apiUrl(this.baseUrl), buildId),
+			AtcBuildSchema,
+		);
 	}
 
 	async triggerJobBuild(
@@ -320,27 +345,36 @@ export class ConcourseClient {
 		pipelineName: string,
 		jobName: string,
 	): Promise<AtcBuildSummary> {
-		const path = `/api/v1/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/jobs/${encodeURIComponent(jobName)}/builds`;
+		const url = teamPipelineJobBuildsUrl(
+			apiUrl(this.baseUrl),
+			teamName,
+			pipelineName,
+			jobName,
+		);
 		const options: RequestInit = { method: "POST" };
-		return this.request(path, AtcBuildSummarySchema, options);
+		return this.request(url, AtcBuildSummarySchema, options);
 	}
 
 	// --- Workers ---
 	async listWorkers(): Promise<AtcWorker[]> {
-		return this.request("/api/v1/workers", AtcWorkerArraySchema);
+		return this.request(
+			allWorkersUrl(apiUrl(this.baseUrl)),
+			AtcWorkerArraySchema,
+		);
 	}
 
 	// --- Users ---
 	async getUserInfo(): Promise<AtcUserInfo> {
 		console.warn("Method getUserInfo not fully implemented yet.");
-		return this.request("/api/v1/user", AtcUserInfoSchema);
+		return this.request(userUrl(apiUrl(this.baseUrl)), AtcUserInfoSchema);
 	}
 
 	async listActiveUsersSince(since: Date): Promise<AtcUser[]> {
 		console.warn("Method listActiveUsersSince not fully implemented yet.");
 		const params = new URLSearchParams({ since: since.toISOString() });
-		const path = `/api/v1/users?${params.toString()}`;
-		return this.request(path, AtcUserArraySchema);
+		const base = usersUrl(apiUrl(this.baseUrl));
+		const url = `${base}?${params.toString()}`;
+		return this.request(url, AtcUserArraySchema);
 	}
 
 	// --- Resources ---
@@ -348,16 +382,24 @@ export class ConcourseClient {
 		teamName: string,
 		pipelineName: string,
 	): Promise<AtcResource[]> {
-		const path = `/api/v1/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resources`;
-		return this.request(path, AtcResourceArraySchema);
+		return this.request(
+			teamPipelineResourcesUrl(apiUrl(this.baseUrl), teamName, pipelineName),
+			AtcResourceArraySchema,
+		);
 	}
 
 	async listResourceTypesForPipeline(
 		teamName: string,
 		pipelineName: string,
 	): Promise<AtcResourceType[]> {
-		const path = `/api/v1/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resource-types`;
-		return this.request(path, AtcResourceTypeArraySchema);
+		return this.request(
+			teamPipelineResourceTypesUrl(
+				apiUrl(this.baseUrl),
+				teamName,
+				pipelineName,
+			),
+			AtcResourceTypeArraySchema,
+		);
 	}
 
 	async getResource(
@@ -365,8 +407,15 @@ export class ConcourseClient {
 		pipelineName: string,
 		resourceName: string,
 	): Promise<AtcResource> {
-		const path = `/api/v1/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resources/${encodeURIComponent(resourceName)}`;
-		return this.request(path, AtcResourceSchema);
+		return this.request(
+			teamPipelineResourceUrl(
+				apiUrl(this.baseUrl),
+				teamName,
+				pipelineName,
+				resourceName,
+			),
+			AtcResourceSchema,
+		);
 	}
 
 	async listResourceVersions(
@@ -381,9 +430,14 @@ export class ConcourseClient {
 		if (limit) params.set("limit", String(limit));
 		if (since) params.set("since", String(since));
 		if (until) params.set("until", String(until));
-		const query = params.toString() ? `?${params.toString()}` : "";
-		const fullPath = `/api/v1/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resources/${encodeURIComponent(resourceName)}/versions${query}`;
-		return this.request(fullPath, AtcResourceVersionArraySchema);
+		const base = teamPipelineResourceVersionsUrl(
+			apiUrl(this.baseUrl),
+			teamName,
+			pipelineName,
+			resourceName,
+		);
+		const url = params.toString() ? `${base}?${params.toString()}` : base;
+		return this.request(url, AtcResourceVersionArraySchema);
 	}
 
 	async checkResource(
@@ -392,7 +446,12 @@ export class ConcourseClient {
 		resourceName: string,
 		version?: AtcVersion,
 	): Promise<AtcBuildSummary> {
-		const path = `/teams/${encodeURIComponent(teamName)}/pipelines/${encodeURIComponent(pipelineName)}/resources/${encodeURIComponent(resourceName)}/check`;
+		const url = teamPipelineResourceCheckUrl(
+			apiUrl(this.baseUrl),
+			teamName,
+			pipelineName,
+			resourceName,
+		);
 		const options: RequestInit = { method: "POST" };
 		if (version) {
 			const body = { from: version };
@@ -401,6 +460,6 @@ export class ConcourseClient {
 			headers.set("Content-Type", "application/json");
 			options.headers = headers;
 		}
-		return this.request(path, AtcBuildSummarySchema, options);
+		return this.request(url, AtcBuildSummarySchema, options);
 	}
 }

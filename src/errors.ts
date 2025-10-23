@@ -2,10 +2,14 @@
  * Base error class for concourse.ts client errors.
  */
 export class ConcourseError extends Error {
-	constructor(message: string) {
+	public response?: Response;
+	public cause?: unknown;
+
+	constructor(message: string, response?: Response, cause?: unknown) {
 		super(message);
 		this.name = this.constructor.name;
-		// Ensure stack trace is captured (needed for V8 environments)
+		this.response = response;
+		this.cause = cause;
 		if (Error.captureStackTrace) {
 			Error.captureStackTrace(this, this.constructor);
 		}
@@ -39,11 +43,4 @@ export class ConcourseApiError extends ConcourseError {
 /**
  * Error indicating a failure during response validation (JSON parsing or Zod schema validation).
  */
-export class ConcourseValidationError extends ConcourseError {
-	public cause?; // Original ZodError or SyntaxError (Type annotation removed)
-
-	constructor(message: string, cause?: Error) {
-		super(message);
-		this.cause = cause;
-	}
-}
+export class ConcourseValidationError extends ConcourseError {}
