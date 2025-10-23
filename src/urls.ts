@@ -3,6 +3,9 @@
 export const apiUrl = (baseUrl: string): string => `${baseUrl}/api/v1`;
 
 export const infoUrl = (api: string): string => `${api}/info`;
+export const skyTokenUrl = (baseUrl: string): string => `${baseUrl}/sky/token`;
+export const skyIssuerTokenUrl = (baseUrl: string): string =>
+	`${baseUrl}/sky/issuer/token`;
 
 export const allTeamsUrl = (api: string): string => `${api}/teams`;
 export const allWorkersUrl = (api: string): string => `${api}/workers`;
@@ -16,6 +19,8 @@ export const buildUrl = (api: string, buildId: string | number): string =>
 
 export const teamUrl = (api: string, teamName: string): string =>
 	`${api}/teams/${encodeURIComponent(teamName)}`;
+export const teamAuthTokenUrl = (api: string, teamName: string): string =>
+	`${api}/teams/${encodeURIComponent(teamName)}/auth/token`;
 
 export const teamPipelinesUrl = (api: string, teamName: string): string =>
 	`${api}/teams/${encodeURIComponent(teamName)}/pipelines`;

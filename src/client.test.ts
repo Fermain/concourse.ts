@@ -4,6 +4,7 @@ import {
 	allPipelinesUrl,
 	apiUrl,
 	infoUrl,
+	skyIssuerTokenUrl,
 	teamPipelineJobBuildsUrl,
 	teamPipelineResourceCheckUrl,
 } from "./urls";
@@ -127,6 +128,59 @@ describe("ConcourseClient", () => {
 		await client.forPipeline("main", "pipe").pause();
 		const init = fetchSpy.mock.calls[0][1] as RequestInit;
 		expect(init.method).toBe("PUT");
+	});
+
+	it("auth: bearer token mode sends Authorization header", async () => {
+		const client = new ConcourseClient({
+			baseUrl: "https://ci.example.com",
+			token: "abc",
+		});
+		const url = allPipelinesUrl(apiUrl("https://ci.example.com"));
+		const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(json([]));
+		await client.listPipelines();
+		const init = spy.mock.calls[0][1] as RequestInit;
+		const h = new Headers(init.headers as HeadersInit);
+		expect(h.get("Authorization")).toBe("Bearer abc");
+	});
+
+	it("auth: basic mode negotiates token (>=6.1) and uses bearer", async () => {
+		const client = new ConcourseClient({
+			baseUrl: "https://ci.example.com",
+			username: "u",
+			password: "p",
+		});
+		const api = apiUrl("https://ci.example.com");
+		// 1) info
+		const spy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValueOnce(json({ version: "6.2.0" }))
+			// 2) sky issuer token
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({
+						idToken: "header.payload.sig",
+						accessToken: "tok123",
+						tokenType: "bearer",
+						expiresIn: 3600,
+					}),
+					{
+						status: 200,
+						headers: {
+							Date: new Date().toUTCString(),
+							"Content-Type": "application/json",
+						},
+					},
+				),
+			)
+			// 3) actual API call
+			.mockResolvedValueOnce(json([]));
+
+		await client.listPipelines();
+		const calls = spy.mock.calls;
+		expect(calls[0][0]).toBe(infoUrl(api));
+		expect(calls[1][0]).toBe(skyIssuerTokenUrl("https://ci.example.com"));
+		const authHeaders = new Headers(calls[2][1].headers);
+		expect(authHeaders.get("Authorization")).toBe("Bearer tok123");
 	});
 
 	// Additional coverage for parity with concourse.js

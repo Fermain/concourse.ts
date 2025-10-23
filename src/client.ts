@@ -46,6 +46,9 @@ import {
 	buildResourcesUrl,
 	buildUrl,
 	infoUrl,
+	skyIssuerTokenUrl,
+	skyTokenUrl,
+	teamAuthTokenUrl,
 	teamBuildsUrl,
 	teamPipelineBuildsUrl,
 	teamPipelineConfigUrl,
@@ -87,6 +90,8 @@ interface ConcourseClientOptions {
 	username?: string;
 	/** Optional password for Basic Authentication. Must be provided with username. Mutually exclusive with token. */
 	password?: string;
+	/** Optional team name for legacy token flow (< v4). */
+	teamName?: string;
 }
 
 /**
@@ -100,6 +105,16 @@ export class ConcourseClient {
 	private readonly username?: string;
 	private readonly password?: string;
 	private readonly authMethod: "token" | "basic" | "none";
+	private readonly teamName?: string;
+
+	private authState?: {
+		accessToken: string;
+		tokenType: string;
+		idToken: string;
+		expiresAt: number; // seconds since epoch
+		serverVersion: string;
+	};
+	private authInFlight: Promise<void> | null = null;
 
 	constructor(options: ConcourseClientOptions) {
 		if (!options.baseUrl) {
@@ -123,6 +138,7 @@ export class ConcourseClient {
 			this.username = options.username;
 			this.password = options.password;
 			this.authMethod = "basic";
+			this.teamName = options.teamName;
 		} else {
 			// Allow no auth for potentially public endpoints
 			this.authMethod = "none";
@@ -163,8 +179,14 @@ export class ConcourseClient {
 		if (this.authMethod === "token" && this.token) {
 			headers.set("Authorization", `Bearer ${this.token}`);
 		} else if (this.authMethod === "basic" && this.username && this.password) {
-			const credentials = btoa(`${this.username}:${this.password}`);
-			headers.set("Authorization", `Basic ${credentials}`);
+			await this.ensureAuthenticated();
+			if (this.authState) {
+				headers.set("Authorization", `Bearer ${this.authState.accessToken}`);
+				if (this.isServerVersionLt610(this.authState.serverVersion)) {
+					const csrf = this.getCsrfFromToken(this.authState.idToken);
+					if (csrf) headers.set("X-Csrf-Token", csrf);
+				}
+			}
 		}
 
 		headers.set("Accept", "application/json");
@@ -250,6 +272,167 @@ export class ConcourseClient {
 				error,
 			);
 		}
+	}
+
+	// ---- Auth discovery (parity with concourse.js) ---- //
+
+	private decodeJwtPayload(token: string): Record<string, unknown> {
+		const parts = token.split(".");
+		if (parts.length < 2) return {};
+		const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+		try {
+			const json = atob(base64);
+			return JSON.parse(json);
+		} catch {
+			return {};
+		}
+	}
+
+	private getCsrfFromToken(idToken: string): string | undefined {
+		const payload = this.decodeJwtPayload(idToken) as { csrf?: string };
+		return payload.csrf;
+	}
+
+	private parseVersion(version: string): [number, number, number] {
+		const [maj, min, patch] = version
+			.split(".")
+			.map((v) => Number.parseInt(v, 10) || 0);
+		return [maj, min ?? 0, patch ?? 0];
+	}
+
+	private isServerVersionLt(
+		version: string,
+		cmp: [number, number, number],
+	): boolean {
+		const a = this.parseVersion(version);
+		for (let i = 0; i < 3; i++) {
+			if (a[i] < cmp[i]) return true;
+			if (a[i] > cmp[i]) return false;
+		}
+		return false;
+	}
+
+	private isServerVersionLt610(version: string): boolean {
+		return this.isServerVersionLt(version, [6, 1, 0]);
+	}
+
+	private async ensureAuthenticated(): Promise<void> {
+		if (!(this.username && this.password)) return;
+		if (this.authState && !this.isExpired(this.authState.expiresAt)) return;
+		if (this.authInFlight) return this.authInFlight;
+		this.authInFlight = this.authenticate().finally(() => {
+			this.authInFlight = null;
+		});
+		return this.authInFlight;
+	}
+
+	private isExpired(expiresAtSeconds: number): boolean {
+		const now = Math.floor(Date.now() / 1000);
+		const skew = 10 * 60; // 10 minutes
+		return now > expiresAtSeconds - skew;
+	}
+
+	private async authenticate(): Promise<void> {
+		// Fetch server version
+		const api = apiUrl(this.baseUrl);
+		const infoResp = await fetch(infoUrl(api));
+		if (!infoResp.ok) throw new Error("Failed to fetch server info for auth");
+		const info = (await infoResp.json()) as { version: string };
+		const serverVersion = info.version;
+
+		let newState: {
+			accessToken: string;
+			tokenType: string;
+			idToken: string;
+			expiresAt: number;
+			serverVersion: string;
+		};
+
+		if (this.isServerVersionLt(serverVersion, [4, 0, 0])) {
+			// Legacy team token
+			const team = this.teamName ?? "main";
+			const resp = await fetch(teamAuthTokenUrl(api, team), {
+				headers: {
+					Authorization: `Basic ${btoa(`${this.username}:${this.password}`)}`,
+				},
+			});
+			if (!resp.ok) throw new Error("Auth (pre v4) failed");
+			const body = (await resp.json()) as { value: string; type: string };
+			const payload = this.decodeJwtPayload(body.value) as { exp?: number };
+			newState = {
+				accessToken: body.value,
+				tokenType: body.type,
+				idToken: body.value,
+				expiresAt:
+					(payload.exp as number) ?? Math.floor(Date.now() / 1000) + 3600,
+				serverVersion,
+			};
+		} else if (this.isServerVersionLt(serverVersion, [6, 1, 0])) {
+			// 4.0.0 - 6.0.x
+			const data = new URLSearchParams({
+				grant_type: "password",
+				username: this.username ?? "",
+				password: this.password ?? "",
+				scope: "openid+profile+email+federated:id+groups",
+			});
+			const resp = await fetch(skyTokenUrl(this.baseUrl), {
+				method: "POST",
+				headers: {
+					Authorization: `Basic ${btoa("fly:Zmx5")}`,
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: data.toString(),
+			});
+			if (!resp.ok) throw new Error("Auth (post v4) failed");
+			const body = (await resp.json()) as {
+				accessToken: string;
+				expiry: string; // ISO 8601
+				tokenType: string;
+			};
+			newState = {
+				accessToken: body.accessToken,
+				tokenType: body.tokenType,
+				idToken: body.accessToken,
+				expiresAt: Math.floor(new Date(body.expiry).getTime() / 1000),
+				serverVersion,
+			};
+		} else {
+			// >= 6.1.0
+			const data = new URLSearchParams({
+				grant_type: "password",
+				username: this.username ?? "",
+				password: this.password ?? "",
+				scope: "openid profile email federated:id groups",
+			});
+			const resp = await fetch(skyIssuerTokenUrl(this.baseUrl), {
+				method: "POST",
+				headers: {
+					Authorization: `Basic ${btoa("fly:Zmx5")}`,
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: data.toString(),
+			});
+			if (!resp.ok) throw new Error("Auth (post v6.1) failed");
+			const body = (await resp.json()) as {
+				idToken: string;
+				accessToken: string;
+				tokenType: string;
+				expiresIn: number;
+			};
+			const dateHeader = resp.headers.get("Date");
+			const serverNow = dateHeader
+				? new Date(dateHeader).getTime() / 1000
+				: Math.floor(Date.now() / 1000);
+			newState = {
+				accessToken: body.accessToken,
+				tokenType: body.tokenType,
+				idToken: body.idToken,
+				expiresAt: Math.floor(serverNow + body.expiresIn),
+				serverVersion,
+			};
+		}
+
+		this.authState = newState;
 	}
 
 	// --- API Methods --- //
