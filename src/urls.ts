@@ -31,6 +31,22 @@ export const teamPipelineConfigUrl = (
 	pipelineName: string,
 ): string => `${teamPipelineUrl(api, teamName, pipelineName)}/config`;
 
+export const teamPipelinePauseUrl = (
+	api: string,
+	teamName: string,
+	pipelineName: string,
+): string => `${teamPipelineUrl(api, teamName, pipelineName)}/pause`;
+export const teamPipelineUnpauseUrl = (
+	api: string,
+	teamName: string,
+	pipelineName: string,
+): string => `${teamPipelineUrl(api, teamName, pipelineName)}/unpause`;
+export const teamPipelineRenameUrl = (
+	api: string,
+	teamName: string,
+	pipelineName: string,
+): string => `${teamPipelineUrl(api, teamName, pipelineName)}/rename`;
+
 export const teamPipelineJobsUrl = (
 	api: string,
 	teamName: string,
@@ -85,3 +101,15 @@ export const teamPipelineResourceCheckUrl = (
 
 export const userUrl = (api: string): string => `${api}/user`;
 export const usersUrl = (api: string): string => `${api}/users`;
+
+export const teamBuildsUrl = (api: string, teamName: string): string =>
+	`${api}/teams/${encodeURIComponent(teamName)}/builds`;
+
+export const teamPipelineBuildsUrl = (
+	api: string,
+	teamName: string,
+	pipelineName: string,
+): string => `${teamPipelineUrl(api, teamName, pipelineName)}/builds`;
+
+export const teamRenameUrl = (api: string, teamName: string): string =>
+	`${teamUrl(api, teamName)}/rename`;

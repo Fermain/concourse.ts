@@ -46,15 +46,20 @@ import {
 	apiUrl,
 	buildUrl,
 	infoUrl,
+	teamBuildsUrl,
+	teamPipelineBuildsUrl,
 	teamPipelineConfigUrl,
 	teamPipelineJobBuildsUrl,
 	teamPipelineJobUrl,
 	teamPipelineJobsUrl,
+	teamPipelinePauseUrl,
+	teamPipelineRenameUrl,
 	teamPipelineResourceCheckUrl,
 	teamPipelineResourceTypesUrl,
 	teamPipelineResourceUrl,
 	teamPipelineResourceVersionsUrl,
 	teamPipelineResourcesUrl,
+	teamPipelineUnpauseUrl,
 	userUrl,
 	usersUrl,
 } from "./urls";
@@ -255,6 +260,79 @@ export class ConcourseClient {
 	 */
 	async getInfo(): Promise<AtcInfo> {
 		return this.request(infoUrl(apiUrl(this.baseUrl)), AtcInfoSchema);
+	}
+
+	// --- Navigators (minimal) --- //
+	forTeam(teamName: string) {
+		const baseApi = apiUrl(this.baseUrl);
+		return {
+			listBuilds: async (page?: Page): Promise<AtcBuild[]> => {
+				const params = new URLSearchParams();
+				if (page?.limit) params.set("limit", String(page.limit));
+				if (page?.since) params.set("since", String(page.since));
+				if (page?.until) params.set("until", String(page.until));
+				const base = teamBuildsUrl(baseApi, teamName);
+				const url = params.toString() ? `${base}?${params.toString()}` : base;
+				return this.request(url, AtcBuildArraySchema);
+			},
+			forPipeline: (pipelineName: string) =>
+				this.forPipeline(teamName, pipelineName),
+		};
+	}
+
+	forPipeline(teamName: string, pipelineName: string) {
+		const baseApi = apiUrl(this.baseUrl);
+		return {
+			pause: async (): Promise<void> => {
+				await this.request(
+					teamPipelinePauseUrl(baseApi, teamName, pipelineName),
+					z.void(),
+					{ method: "PUT" },
+				);
+			},
+			unpause: async (): Promise<void> => {
+				await this.request(
+					teamPipelineUnpauseUrl(baseApi, teamName, pipelineName),
+					z.void(),
+					{ method: "PUT" },
+				);
+			},
+			rename: async (newName: string): Promise<void> => {
+				await this.request(
+					teamPipelineRenameUrl(baseApi, teamName, pipelineName),
+					z.void(),
+					{
+						method: "PUT",
+						body: JSON.stringify({ name: newName }),
+						headers: { "Content-Type": "application/json" },
+					},
+				);
+			},
+			listJobs: async (): Promise<AtcJob[]> =>
+				this.request(
+					teamPipelineJobsUrl(baseApi, teamName, pipelineName),
+					AtcJobArraySchema,
+				),
+			listResources: async (): Promise<AtcResource[]> =>
+				this.request(
+					teamPipelineResourcesUrl(baseApi, teamName, pipelineName),
+					AtcResourceArraySchema,
+				),
+			listResourceTypes: async (): Promise<unknown[]> =>
+				this.request(
+					teamPipelineResourceTypesUrl(baseApi, teamName, pipelineName),
+					z.array(z.unknown()),
+				),
+			listBuilds: async (page?: Page): Promise<AtcBuild[]> => {
+				const params = new URLSearchParams();
+				if (page?.limit) params.set("limit", String(page.limit));
+				if (page?.since) params.set("since", String(page.since));
+				if (page?.until) params.set("until", String(page.until));
+				const base = teamPipelineBuildsUrl(baseApi, teamName, pipelineName);
+				const url = params.toString() ? `${base}?${params.toString()}` : base;
+				return this.request(url, AtcBuildArraySchema);
+			},
+		};
 	}
 
 	// --- Pipelines ---
