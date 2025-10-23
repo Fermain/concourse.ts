@@ -1,6 +1,5 @@
-import { z } from "zod"; // Import z itself
+import { z } from "zod";
 import { ConcourseError } from "./errors";
-// No need to import fetch, it's globally available
 import type {
 	AtcBuild,
 	AtcBuildSummary,
@@ -17,7 +16,7 @@ import type {
 	AtcVersion,
 	AtcWorker,
 	Page,
-} from "./types/atc"; // Restore all type imports
+} from "./types/atc";
 import {
 	AtcBuildArraySchema,
 	AtcBuildSchema,
@@ -25,18 +24,18 @@ import {
 	AtcConfigSchema,
 	AtcInfoSchema,
 	AtcJobArraySchema,
-	AtcJobSchema, // Added Job schema
+	AtcJobSchema,
 	AtcPipelineArraySchema,
 	AtcResourceArraySchema,
 	AtcResourceSchema,
 	AtcResourceTypeArraySchema,
 	AtcResourceVersionArraySchema,
 	AtcTeamArraySchema,
-	AtcUserArraySchema, // Added for listActiveUsersSince
-	AtcUserInfoSchema, // Needed for getUserInfo
-	AtcUserSchema, // Needed for listActiveUsersSince
+	AtcUserArraySchema,
+	AtcUserInfoSchema,
+	AtcUserSchema,
 	AtcWorkerArraySchema,
-} from "./types/atc.schemas"; // Import Zod schemas
+} from "./types/atc.schemas";
 import {
 	allBuildsUrl,
 	allJobsUrl,
@@ -76,12 +75,8 @@ import {
 	workerPruneUrl,
 } from "./urls";
 
-// Placeholder for ATC types - we will define these properly later
-// AtcPipeline removed, imported specifically
-// AtcTeam and AtcInfo now imported as types
-
 /**
- * Configuration options for the ConcourseClient.
+ * Configuration options for the Concourse client.
  */
 interface ConcourseClientOptions {
 	/** The base URL of the Concourse ATC API (e.g., "http://localhost:8080"). */
@@ -93,11 +88,6 @@ interface ConcourseClientOptions {
 	/** Optional password for Basic Authentication. Must be provided with username. Mutually exclusive with token. */
 	password?: string;
 }
-
-/**
- * Error thrown when API requests fail or validation errors occur.
- */
-// Use shared ConcourseError from errors.ts
 
 /**
  * A TypeScript client for interacting with the Concourse ATC API.
@@ -274,7 +264,10 @@ export class ConcourseClient {
 		return this.request(infoUrl(apiUrl(this.baseUrl)), AtcInfoSchema);
 	}
 
-	// --- Navigators (minimal) --- //
+	/**
+	 * Returns helpers scoped to a team.
+	 * Use `forTeam(team).forPipeline(name)` to access pipeline-scoped helpers.
+	 */
 	forTeam(teamName: string) {
 		const baseApi = apiUrl(this.baseUrl);
 		return {
@@ -292,6 +285,10 @@ export class ConcourseClient {
 		};
 	}
 
+	/**
+	 * Returns helpers scoped to a specific pipeline within a team.
+	 * Includes pause/unpause/rename and list methods for jobs, resources, and builds.
+	 */
 	forPipeline(teamName: string, pipelineName: string) {
 		const baseApi = apiUrl(this.baseUrl);
 		return {
@@ -347,6 +344,10 @@ export class ConcourseClient {
 		};
 	}
 
+	/**
+	 * Returns helpers scoped to a specific job.
+	 * Includes pause/unpause, list/get/create builds, and list inputs.
+	 */
 	forJob(teamName: string, pipelineName: string, jobName: string) {
 		const baseApi = apiUrl(this.baseUrl);
 		return {
@@ -394,6 +395,10 @@ export class ConcourseClient {
 		};
 	}
 
+	/**
+	 * Returns helpers scoped to a specific resource.
+	 * Includes pause/unpause, list/get versions, and `forVersion`.
+	 */
 	forResource(teamName: string, pipelineName: string, resourceName: string) {
 		const baseApi = apiUrl(this.baseUrl);
 		return {
@@ -456,6 +461,10 @@ export class ConcourseClient {
 		};
 	}
 
+	/**
+	 * Returns helpers scoped to a specific resource version.
+	 * Includes causality graph and builds referencing the version.
+	 */
 	forResourceVersion(
 		teamName: string,
 		pipelineName: string,
@@ -500,6 +509,9 @@ export class ConcourseClient {
 		};
 	}
 
+	/**
+	 * Returns helpers scoped to a specific build.
+	 */
 	forBuild(buildId: number | string) {
 		const baseApi = apiUrl(this.baseUrl);
 		return {
@@ -511,6 +523,9 @@ export class ConcourseClient {
 		};
 	}
 
+	/**
+	 * Returns helpers scoped to a specific worker.
+	 */
 	forWorker(workerName: string) {
 		const baseApi = apiUrl(this.baseUrl);
 		return {
