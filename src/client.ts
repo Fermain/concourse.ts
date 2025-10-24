@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AuthSession, type AuthState, csrfFromIdToken } from "./auth/session";
+import { TeamClient } from "./clients/TeamClient";
 import { TeamPipelineClient } from "./clients/TeamPipelineClient";
 import { ConcourseError } from "./errors";
 import type { RequestAuthContext } from "./http/request";
@@ -318,20 +319,29 @@ export class ConcourseClient {
 	 * Use `forTeam(team).forPipeline(name)` to access pipeline-scoped helpers.
 	 */
 	forTeam(teamName: string) {
-		const baseApi = apiUrl(this.baseUrl);
-		return {
-			listBuilds: async (page?: Page): Promise<AtcBuild[]> => {
-				const params = new URLSearchParams();
-				if (page?.limit) params.set("limit", String(page.limit));
-				if (page?.since) params.set("since", String(page.since));
-				if (page?.until) params.set("until", String(page.until));
-				const base = teamBuildsUrl(baseApi, teamName);
-				const url = params.toString() ? `${base}?${params.toString()}` : base;
-				return this.request(url, AtcBuildArraySchema);
-			},
-			forPipeline: (pipelineName: string) =>
-				this.forPipeline(teamName, pipelineName),
+		const authProvider = async (): Promise<RequestAuthContext> => {
+			if (this.authMethod === "token" && this.token)
+				return { mode: "token", bearerToken: this.token };
+			if (this.authMethod === "basic" && this.username && this.password) {
+				await this.ensureAuthenticated();
+				const state = this.session?.current;
+				if (state) {
+					return {
+						mode: "token",
+						bearerToken: state.accessToken,
+						csrfToken: this.isServerVersionLt610(state.serverVersion)
+							? csrfFromIdToken(state.idToken)
+							: undefined,
+					};
+				}
+			}
+			return { mode: "none" };
 		};
+		return new TeamClient({
+			baseUrl: this.baseUrl,
+			teamName,
+			auth: authProvider,
+		});
 	}
 
 	/**
