@@ -3,6 +3,15 @@ export * from "./schemas/primitives";
 export * from "./schemas/info";
 export * from "./schemas/team";
 export * from "./schemas/pipeline";
+export * from "./schemas/build";
+export * from "./schemas/job";
+export * from "./schemas/resource";
+export * from "./schemas/resource_config";
+export * from "./schemas/resource_type";
+export * from "./schemas/worker";
+export * from "./schemas/user";
+export * from "./schemas/events";
+export * from "./schemas/config";
 
 // --- Primitives / Base Schemas --- //
 
