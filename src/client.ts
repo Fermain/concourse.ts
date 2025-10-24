@@ -1,5 +1,9 @@
 import { z } from "zod";
+import { AuthSession, type AuthState, csrfFromIdToken } from "./auth/session";
+import { TeamPipelineClient } from "./clients/TeamPipelineClient";
 import { ConcourseError } from "./errors";
+import type { RequestAuthContext } from "./http/request";
+import { requestJson } from "./http/request";
 import type {
 	AtcBuild,
 	AtcBuildSummary,
@@ -107,14 +111,7 @@ export class ConcourseClient {
 	private readonly authMethod: "token" | "basic" | "none";
 	private readonly teamName?: string;
 
-	private authState?: {
-		accessToken: string;
-		tokenType: string;
-		idToken: string;
-		expiresAt: number; // seconds since epoch
-		serverVersion: string;
-	};
-	private authInFlight: Promise<void> | null = null;
+	private session?: AuthSession;
 
 	constructor(options: ConcourseClientOptions) {
 		if (!options.baseUrl) {
@@ -160,12 +157,6 @@ export class ConcourseClient {
 
 	/**
 	 * Makes an authenticated request to the Concourse API, validates the response, and returns typed data.
-	 *
-	 * @param path The API endpoint path (e.g., "/api/v1/info").
-	 * @param schema The Zod schema to validate the response against.
-	 * @param options Optional fetch options.
-	 * @returns The validated data conforming to the schema.
-	 * @throws {ConcourseError} If the request fails or validation fails.
 	 */
 	private async request<T extends z.ZodTypeAny>(
 		url: string,
@@ -175,15 +166,15 @@ export class ConcourseClient {
 		const urlWithBase = url.startsWith("http") ? url : `${this.baseUrl}${url}`;
 		const headers = new Headers(options.headers);
 
-		// Add Authorization header based on configured method
 		if (this.authMethod === "token" && this.token) {
 			headers.set("Authorization", `Bearer ${this.token}`);
 		} else if (this.authMethod === "basic" && this.username && this.password) {
 			await this.ensureAuthenticated();
-			if (this.authState) {
-				headers.set("Authorization", `Bearer ${this.authState.accessToken}`);
-				if (this.isServerVersionLt610(this.authState.serverVersion)) {
-					const csrf = this.getCsrfFromToken(this.authState.idToken);
+			const state = this.session?.current;
+			if (state) {
+				headers.set("Authorization", `Bearer ${state.accessToken}`);
+				if (this.isServerVersionLt610(state.serverVersion)) {
+					const csrf = csrfFromIdToken(state.idToken);
 					if (csrf) headers.set("X-Csrf-Token", csrf);
 				}
 			}
@@ -274,25 +265,6 @@ export class ConcourseClient {
 		}
 	}
 
-	// ---- Auth discovery (parity with concourse.js) ---- //
-
-	private decodeJwtPayload(token: string): Record<string, unknown> {
-		const parts = token.split(".");
-		if (parts.length < 2) return {};
-		const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-		try {
-			const json = atob(base64);
-			return JSON.parse(json);
-		} catch {
-			return {};
-		}
-	}
-
-	private getCsrfFromToken(idToken: string): string | undefined {
-		const payload = this.decodeJwtPayload(idToken) as { csrf?: string };
-		return payload.csrf;
-	}
-
 	private parseVersion(version: string): [number, number, number] {
 		const [maj, min, patch] = version
 			.split(".")
@@ -316,123 +288,17 @@ export class ConcourseClient {
 		return this.isServerVersionLt(version, [6, 1, 0]);
 	}
 
+	// --- Auth orchestration --- //
 	private async ensureAuthenticated(): Promise<void> {
 		if (!(this.username && this.password)) return;
-		if (this.authState && !this.isExpired(this.authState.expiresAt)) return;
-		if (this.authInFlight) return this.authInFlight;
-		this.authInFlight = this.authenticate().finally(() => {
-			this.authInFlight = null;
-		});
-		return this.authInFlight;
-	}
-
-	private isExpired(expiresAtSeconds: number): boolean {
-		const now = Math.floor(Date.now() / 1000);
-		const skew = 10 * 60; // 10 minutes
-		return now > expiresAtSeconds - skew;
-	}
-
-	private async authenticate(): Promise<void> {
-		// Fetch server version
-		const api = apiUrl(this.baseUrl);
-		const infoResp = await fetch(infoUrl(api));
-		if (!infoResp.ok) throw new Error("Failed to fetch server info for auth");
-		const info = (await infoResp.json()) as { version: string };
-		const serverVersion = info.version;
-
-		let newState: {
-			accessToken: string;
-			tokenType: string;
-			idToken: string;
-			expiresAt: number;
-			serverVersion: string;
-		};
-
-		if (this.isServerVersionLt(serverVersion, [4, 0, 0])) {
-			// Legacy team token
-			const team = this.teamName ?? "main";
-			const resp = await fetch(teamAuthTokenUrl(api, team), {
-				headers: {
-					Authorization: `Basic ${btoa(`${this.username}:${this.password}`)}`,
-				},
+		if (!this.session)
+			this.session = new AuthSession({
+				baseUrl: this.baseUrl,
+				username: this.username,
+				password: this.password,
+				teamName: this.teamName,
 			});
-			if (!resp.ok) throw new Error("Auth (pre v4) failed");
-			const body = (await resp.json()) as { value: string; type: string };
-			const payload = this.decodeJwtPayload(body.value) as { exp?: number };
-			newState = {
-				accessToken: body.value,
-				tokenType: body.type,
-				idToken: body.value,
-				expiresAt:
-					(payload.exp as number) ?? Math.floor(Date.now() / 1000) + 3600,
-				serverVersion,
-			};
-		} else if (this.isServerVersionLt(serverVersion, [6, 1, 0])) {
-			// 4.0.0 - 6.0.x
-			const data = new URLSearchParams({
-				grant_type: "password",
-				username: this.username ?? "",
-				password: this.password ?? "",
-				scope: "openid+profile+email+federated:id+groups",
-			});
-			const resp = await fetch(skyTokenUrl(this.baseUrl), {
-				method: "POST",
-				headers: {
-					Authorization: `Basic ${btoa("fly:Zmx5")}`,
-					"Content-Type": "application/x-www-form-urlencoded",
-				},
-				body: data.toString(),
-			});
-			if (!resp.ok) throw new Error("Auth (post v4) failed");
-			const body = (await resp.json()) as {
-				accessToken: string;
-				expiry: string; // ISO 8601
-				tokenType: string;
-			};
-			newState = {
-				accessToken: body.accessToken,
-				tokenType: body.tokenType,
-				idToken: body.accessToken,
-				expiresAt: Math.floor(new Date(body.expiry).getTime() / 1000),
-				serverVersion,
-			};
-		} else {
-			// >= 6.1.0
-			const data = new URLSearchParams({
-				grant_type: "password",
-				username: this.username ?? "",
-				password: this.password ?? "",
-				scope: "openid profile email federated:id groups",
-			});
-			const resp = await fetch(skyIssuerTokenUrl(this.baseUrl), {
-				method: "POST",
-				headers: {
-					Authorization: `Basic ${btoa("fly:Zmx5")}`,
-					"Content-Type": "application/x-www-form-urlencoded",
-				},
-				body: data.toString(),
-			});
-			if (!resp.ok) throw new Error("Auth (post v6.1) failed");
-			const body = (await resp.json()) as {
-				idToken: string;
-				accessToken: string;
-				tokenType: string;
-				expiresIn: number;
-			};
-			const dateHeader = resp.headers.get("Date");
-			const serverNow = dateHeader
-				? new Date(dateHeader).getTime() / 1000
-				: Math.floor(Date.now() / 1000);
-			newState = {
-				accessToken: body.accessToken,
-				tokenType: body.tokenType,
-				idToken: body.idToken,
-				expiresAt: Math.floor(serverNow + body.expiresIn),
-				serverVersion,
-			};
-		}
-
-		this.authState = newState;
+		await this.session.ensure();
 	}
 
 	// --- API Methods --- //
@@ -473,58 +339,30 @@ export class ConcourseClient {
 	 * Includes pause/unpause/rename and list methods for jobs, resources, and builds.
 	 */
 	forPipeline(teamName: string, pipelineName: string) {
-		const baseApi = apiUrl(this.baseUrl);
-		return {
-			pause: async (): Promise<void> => {
-				await this.request(
-					teamPipelinePauseUrl(baseApi, teamName, pipelineName),
-					z.void(),
-					{ method: "PUT" },
-				);
-			},
-			unpause: async (): Promise<void> => {
-				await this.request(
-					teamPipelineUnpauseUrl(baseApi, teamName, pipelineName),
-					z.void(),
-					{ method: "PUT" },
-				);
-			},
-			rename: async (newName: string): Promise<void> => {
-				await this.request(
-					teamPipelineRenameUrl(baseApi, teamName, pipelineName),
-					z.void(),
-					{
-						method: "PUT",
-						body: JSON.stringify({ name: newName }),
-						headers: { "Content-Type": "application/json" },
-					},
-				);
-			},
-			listJobs: async (): Promise<AtcJob[]> =>
-				this.request(
-					teamPipelineJobsUrl(baseApi, teamName, pipelineName),
-					AtcJobArraySchema,
-				),
-			listResources: async (): Promise<AtcResource[]> =>
-				this.request(
-					teamPipelineResourcesUrl(baseApi, teamName, pipelineName),
-					AtcResourceArraySchema,
-				),
-			listResourceTypes: async (): Promise<unknown[]> =>
-				this.request(
-					teamPipelineResourceTypesUrl(baseApi, teamName, pipelineName),
-					z.array(z.unknown()),
-				),
-			listBuilds: async (page?: Page): Promise<AtcBuild[]> => {
-				const params = new URLSearchParams();
-				if (page?.limit) params.set("limit", String(page.limit));
-				if (page?.since) params.set("since", String(page.since));
-				if (page?.until) params.set("until", String(page.until));
-				const base = teamPipelineBuildsUrl(baseApi, teamName, pipelineName);
-				const url = params.toString() ? `${base}?${params.toString()}` : base;
-				return this.request(url, AtcBuildArraySchema);
-			},
+		const authProvider = async (): Promise<RequestAuthContext> => {
+			if (this.authMethod === "token" && this.token)
+				return { mode: "token", bearerToken: this.token };
+			if (this.authMethod === "basic" && this.username && this.password) {
+				await this.ensureAuthenticated();
+				const state = this.session?.current;
+				if (state) {
+					return {
+						mode: "token",
+						bearerToken: state.accessToken,
+						csrfToken: this.isServerVersionLt610(state.serverVersion)
+							? csrfFromIdToken(state.idToken)
+							: undefined,
+					};
+				}
+			}
+			return { mode: "none" };
 		};
+		return new TeamPipelineClient({
+			baseUrl: this.baseUrl,
+			teamName,
+			pipelineName,
+			auth: authProvider,
+		});
 	}
 
 	/**
