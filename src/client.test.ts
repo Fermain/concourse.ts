@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConcourseClient } from "./client";
 import {
+	allBuildsUrl,
 	allPipelinesUrl,
+	allResourcesUrl,
 	apiUrl,
 	infoUrl,
 	skyIssuerTokenUrl,
 	teamPipelineJobBuildsUrl,
 	teamPipelineResourceCheckUrl,
+	teamUrl,
 } from "./urls";
 
 const makeClient = () =>
@@ -60,6 +63,57 @@ describe("ConcourseClient", () => {
 		const result = await client.listPipelines();
 		expect(fetchSpy.mock.calls[0][0]).toBe(url);
 		expect(result[0].name).toBe("p");
+	});
+
+	it("listBuilds adds pagination params", async () => {
+		const client = makeClient();
+		const base = allBuildsUrl(apiUrl("https://ci.example.com"));
+		const url = `${base}?limit=3&since=5&until=9`;
+		const data: unknown[] = [];
+		const fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValueOnce(json(data));
+
+		await client.listBuilds({ limit: 3, since: 5, until: 9 });
+		expect(fetchSpy.mock.calls[0][0]).toBe(url);
+	});
+
+	it("listResources hits /api/v1/resources", async () => {
+		const client = makeClient();
+		const url = allResourcesUrl(apiUrl("https://ci.example.com"));
+		const fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValueOnce(json([]));
+
+		await client.listResources();
+		expect(fetchSpy.mock.calls[0][0]).toBe(url);
+	});
+
+	it("listJobs alias maps to listAllJobs", async () => {
+		const client = makeClient();
+		const url = `${apiUrl("https://ci.example.com")}/jobs`;
+		const fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValueOnce(json([]));
+
+		await client.listJobs();
+		expect(fetchSpy.mock.calls[0][0]).toBe(url);
+	});
+
+	it("setTeam puts auth config", async () => {
+		const client = makeClient();
+		const url = teamUrl(apiUrl("https://ci.example.com"), "main");
+		const fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValueOnce(json({ id: 1, name: "main" }));
+
+		await client.setTeam("main", { users: ["u"], groups: ["g"] });
+		const [, init] = fetchSpy.mock.calls[0];
+		expect(init.method).toBe("PUT");
+		expect(JSON.parse(init.body as string)).toEqual({
+			auth: { users: ["u"], groups: ["g"] },
+		});
+		expect(fetchSpy.mock.calls[0][0]).toBe(url);
 	});
 
 	it("listJobBuilds adds pagination params", async () => {
@@ -246,6 +300,29 @@ describe("ConcourseClient", () => {
 		expect(fetchSpy.mock.calls[0][0]).toBe(base);
 		expect((fetchSpy.mock.calls[0][1] as RequestInit).method).toBe("POST");
 		expect(result.id).toBe(1);
+	});
+
+	it("team client: rename performs PUT and mutates name", async () => {
+		const client = makeClient();
+		const spy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValueOnce(json(null))
+			.mockResolvedValueOnce(json([]));
+		await client.forTeam("old").rename("new");
+		await client.forTeam("new").listBuilds();
+		// second call uses new in URL implicitly; ensure first was PUT
+		const init = spy.mock.calls[0][1] as RequestInit;
+		expect(init.method).toBe("PUT");
+	});
+
+	it("pipeline client: delete issues DELETE", async () => {
+		const client = makeClient();
+		const spy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValueOnce(new Response(null, { status: 204 }));
+		await client.forPipeline("t", "p").delete();
+		const init = spy.mock.calls[0][1] as RequestInit;
+		expect(init.method).toBe("DELETE");
 	});
 
 	it("resource navigator: listVersions builds query", async () => {

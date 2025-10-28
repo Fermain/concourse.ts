@@ -1,7 +1,8 @@
+import { z } from "zod";
 import type { RequestAuthContext } from "../http/request";
 import { requestJson } from "../http/request";
 import { AtcBuildArraySchema } from "../types/atc.schemas";
-import { apiUrl, teamBuildsUrl } from "../urls";
+import { apiUrl, teamBuildsUrl, teamRenameUrl, teamUrl } from "../urls";
 import { TeamPipelineClient } from "./TeamPipelineClient";
 
 export interface TeamClientOptions {
@@ -12,6 +13,37 @@ export interface TeamClientOptions {
 
 export class TeamClient {
 	constructor(private readonly options: TeamClientOptions) {}
+
+	async rename(newTeamName: string): Promise<void> {
+		const api = apiUrl(this.options.baseUrl);
+		const auth = await this.options.auth();
+		await requestJson(
+			teamRenameUrl(api, this.options.teamName),
+			z.void(),
+			{
+				method: "PUT",
+				body: JSON.stringify({ name: newTeamName }),
+				headers: { "Content-Type": "application/json" },
+			},
+			auth,
+		);
+		// local mutation mirrors concourse.js behavior
+		(this as unknown as { options: TeamClientOptions }).options.teamName =
+			newTeamName;
+	}
+
+	async destroy(): Promise<void> {
+		const api = apiUrl(this.options.baseUrl);
+		const auth = await this.options.auth();
+		await requestJson(
+			teamUrl(api, this.options.teamName),
+			z.void(),
+			{
+				method: "DELETE",
+			},
+			auth,
+		);
+	}
 
 	async listBuilds(params?: {
 		limit?: number;

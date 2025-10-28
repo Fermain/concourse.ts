@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { AuthSession, type AuthState, csrfFromIdToken } from "./auth/session";
+import { BuildClient } from "./clients/BuildClient";
 import { TeamClient } from "./clients/TeamClient";
 import { TeamPipelineClient } from "./clients/TeamPipelineClient";
+import { TeamPipelineJobClient } from "./clients/TeamPipelineJobClient";
+import { TeamPipelineResourceClient } from "./clients/TeamPipelineResourceClient";
+import { TeamPipelineResourceVersionClient } from "./clients/TeamPipelineResourceVersionClient";
+import { WorkerClient } from "./clients/WorkerClient";
 import { ConcourseError } from "./errors";
 import type { RequestAuthContext } from "./http/request";
 import { requestJson } from "./http/request";
@@ -36,6 +41,7 @@ import {
 	AtcResourceTypeArraySchema,
 	AtcResourceVersionArraySchema,
 	AtcTeamArraySchema,
+	AtcTeamSchema,
 	AtcUserArraySchema,
 	AtcUserInfoSchema,
 	AtcUserSchema,
@@ -45,6 +51,7 @@ import {
 	allBuildsUrl,
 	allJobsUrl,
 	allPipelinesUrl,
+	allResourcesUrl,
 	allTeamsUrl,
 	allWorkersUrl,
 	apiUrl,
@@ -78,6 +85,7 @@ import {
 	teamPipelineResourceVersionsUrl,
 	teamPipelineResourcesUrl,
 	teamPipelineUnpauseUrl,
+	teamUrl,
 	userUrl,
 	usersUrl,
 	workerPruneUrl,
@@ -380,50 +388,31 @@ export class ConcourseClient {
 	 * Includes pause/unpause, list/get/create builds, and list inputs.
 	 */
 	forJob(teamName: string, pipelineName: string, jobName: string) {
-		const baseApi = apiUrl(this.baseUrl);
-		return {
-			pause: async (): Promise<void> => {
-				await this.request(
-					teamPipelineJobPauseUrl(baseApi, teamName, pipelineName, jobName),
-					z.void(),
-					{ method: "PUT" },
-				);
-			},
-			unpause: async (): Promise<void> => {
-				await this.request(
-					teamPipelineJobUnpauseUrl(baseApi, teamName, pipelineName, jobName),
-					z.void(),
-					{ method: "PUT" },
-				);
-			},
-			listBuilds: async (): Promise<AtcBuild[]> =>
-				this.request(
-					teamPipelineJobBuildsUrl(baseApi, teamName, pipelineName, jobName),
-					AtcBuildArraySchema,
-				),
-			getBuild: async (buildName: string): Promise<AtcBuild> =>
-				this.request(
-					teamPipelineJobBuildUrl(
-						baseApi,
-						teamName,
-						pipelineName,
-						jobName,
-						buildName,
-					),
-					AtcBuildSchema,
-				),
-			createBuild: async (): Promise<AtcBuildSummary> =>
-				this.request(
-					teamPipelineJobBuildsUrl(baseApi, teamName, pipelineName, jobName),
-					AtcBuildSummarySchema,
-					{ method: "POST" },
-				),
-			listInputs: async (): Promise<unknown[]> =>
-				this.request(
-					teamPipelineJobInputsUrl(baseApi, teamName, pipelineName, jobName),
-					z.array(z.unknown()),
-				),
+		const authProvider = async (): Promise<RequestAuthContext> => {
+			if (this.authMethod === "token" && this.token)
+				return { mode: "token", bearerToken: this.token };
+			if (this.authMethod === "basic" && this.username && this.password) {
+				await this.ensureAuthenticated();
+				const state = this.session?.current;
+				if (state) {
+					return {
+						mode: "token",
+						bearerToken: state.accessToken,
+						csrfToken: this.isServerVersionLt610(state.serverVersion)
+							? csrfFromIdToken(state.idToken)
+							: undefined,
+					};
+				}
+			}
+			return { mode: "none" };
 		};
+		return new TeamPipelineJobClient({
+			baseUrl: this.baseUrl,
+			teamName,
+			pipelineName,
+			jobName,
+			auth: authProvider,
+		});
 	}
 
 	/**
@@ -431,65 +420,31 @@ export class ConcourseClient {
 	 * Includes pause/unpause, list/get versions, and `forVersion`.
 	 */
 	forResource(teamName: string, pipelineName: string, resourceName: string) {
-		const baseApi = apiUrl(this.baseUrl);
-		return {
-			pause: async (): Promise<void> => {
-				await this.request(
-					teamPipelineResourcePauseUrl(
-						baseApi,
-						teamName,
-						pipelineName,
-						resourceName,
-					),
-					z.void(),
-					{ method: "PUT" },
-				);
-			},
-			unpause: async (): Promise<void> => {
-				await this.request(
-					teamPipelineResourceUnpauseUrl(
-						baseApi,
-						teamName,
-						pipelineName,
-						resourceName,
-					),
-					z.void(),
-					{ method: "PUT" },
-				);
-			},
-			listVersions: async (page?: Page): Promise<AtcResourceVersion[]> => {
-				const params = new URLSearchParams();
-				if (page?.limit) params.set("limit", String(page.limit));
-				if (page?.since) params.set("since", String(page.since));
-				if (page?.until) params.set("until", String(page.until));
-				const base = teamPipelineResourceVersionsUrl(
-					baseApi,
-					teamName,
-					pipelineName,
-					resourceName,
-				);
-				const url = params.toString() ? `${base}?${params.toString()}` : base;
-				return this.request(url, AtcResourceVersionArraySchema);
-			},
-			getVersion: async (versionId: number): Promise<AtcResourceVersion> =>
-				this.request(
-					teamPipelineResourceVersionUrl(
-						baseApi,
-						teamName,
-						pipelineName,
-						resourceName,
-						versionId,
-					),
-					z.any() as unknown as typeof AtcResourceVersionArraySchema.element,
-				),
-			forVersion: (versionId: number) =>
-				this.forResourceVersion(
-					teamName,
-					pipelineName,
-					resourceName,
-					versionId,
-				),
+		const authProvider = async (): Promise<RequestAuthContext> => {
+			if (this.authMethod === "token" && this.token)
+				return { mode: "token", bearerToken: this.token };
+			if (this.authMethod === "basic" && this.username && this.password) {
+				await this.ensureAuthenticated();
+				const state = this.session?.current;
+				if (state) {
+					return {
+						mode: "token",
+						bearerToken: state.accessToken,
+						csrfToken: this.isServerVersionLt610(state.serverVersion)
+							? csrfFromIdToken(state.idToken)
+							: undefined,
+					};
+				}
+			}
+			return { mode: "none" };
 		};
+		return new TeamPipelineResourceClient({
+			baseUrl: this.baseUrl,
+			teamName,
+			pipelineName,
+			resourceName,
+			auth: authProvider,
+		});
 	}
 
 	/**
@@ -502,70 +457,90 @@ export class ConcourseClient {
 		resourceName: string,
 		versionId: number,
 	) {
-		const baseApi = apiUrl(this.baseUrl);
-		return {
-			getCausality: async (): Promise<unknown> =>
-				this.request(
-					teamPipelineResourceVersionCausalityUrl(
-						baseApi,
-						teamName,
-						pipelineName,
-						resourceName,
-						versionId,
-					),
-					z.unknown(),
-				),
-			listBuildsWithVersionAsInput: async (): Promise<AtcBuild[]> =>
-				this.request(
-					teamPipelineResourceVersionInputToUrl(
-						baseApi,
-						teamName,
-						pipelineName,
-						resourceName,
-						versionId,
-					),
-					AtcBuildArraySchema,
-				),
-			listBuildsWithVersionAsOutput: async (): Promise<AtcBuild[]> =>
-				this.request(
-					teamPipelineResourceVersionOutputOfUrl(
-						baseApi,
-						teamName,
-						pipelineName,
-						resourceName,
-						versionId,
-					),
-					AtcBuildArraySchema,
-				),
+		const authProvider = async (): Promise<RequestAuthContext> => {
+			if (this.authMethod === "token" && this.token)
+				return { mode: "token", bearerToken: this.token };
+			if (this.authMethod === "basic" && this.username && this.password) {
+				await this.ensureAuthenticated();
+				const state = this.session?.current;
+				if (state) {
+					return {
+						mode: "token",
+						bearerToken: state.accessToken,
+						csrfToken: this.isServerVersionLt610(state.serverVersion)
+							? csrfFromIdToken(state.idToken)
+							: undefined,
+					};
+				}
+			}
+			return { mode: "none" };
 		};
+		return new TeamPipelineResourceVersionClient({
+			baseUrl: this.baseUrl,
+			teamName,
+			pipelineName,
+			resourceName,
+			versionId,
+			auth: authProvider,
+		});
 	}
 
 	/**
 	 * Returns helpers scoped to a specific build.
 	 */
 	forBuild(buildId: number | string) {
-		const baseApi = apiUrl(this.baseUrl);
-		return {
-			listResources: async (): Promise<AtcResource[]> =>
-				this.request(
-					buildResourcesUrl(baseApi, buildId),
-					AtcResourceArraySchema,
-				),
+		const authProvider = async (): Promise<RequestAuthContext> => {
+			if (this.authMethod === "token" && this.token)
+				return { mode: "token", bearerToken: this.token };
+			if (this.authMethod === "basic" && this.username && this.password) {
+				await this.ensureAuthenticated();
+				const state = this.session?.current;
+				if (state) {
+					return {
+						mode: "token",
+						bearerToken: state.accessToken,
+						csrfToken: this.isServerVersionLt610(state.serverVersion)
+							? csrfFromIdToken(state.idToken)
+							: undefined,
+					};
+				}
+			}
+			return { mode: "none" };
 		};
+		return new BuildClient({
+			baseUrl: this.baseUrl,
+			buildId,
+			auth: authProvider,
+		});
 	}
 
 	/**
 	 * Returns helpers scoped to a specific worker.
 	 */
 	forWorker(workerName: string) {
-		const baseApi = apiUrl(this.baseUrl);
-		return {
-			prune: async (): Promise<void> => {
-				await this.request(workerPruneUrl(baseApi, workerName), z.void(), {
-					method: "PUT",
-				});
-			},
+		const authProvider = async (): Promise<RequestAuthContext> => {
+			if (this.authMethod === "token" && this.token)
+				return { mode: "token", bearerToken: this.token };
+			if (this.authMethod === "basic" && this.username && this.password) {
+				await this.ensureAuthenticated();
+				const state = this.session?.current;
+				if (state) {
+					return {
+						mode: "token",
+						bearerToken: state.accessToken,
+						csrfToken: this.isServerVersionLt610(state.serverVersion)
+							? csrfFromIdToken(state.idToken)
+							: undefined,
+					};
+				}
+			}
+			return { mode: "none" };
 		};
+		return new WorkerClient({
+			baseUrl: this.baseUrl,
+			workerName,
+			auth: authProvider,
+		});
 	}
 
 	// --- Pipelines ---
@@ -595,9 +570,35 @@ export class ConcourseClient {
 		return this.request(allTeamsUrl(apiUrl(this.baseUrl)), AtcTeamArraySchema);
 	}
 
+	/**
+	 * Creates or updates a team's auth configuration.
+	 * PUT /api/v1/teams/{teamName}
+	 */
+	async setTeam(
+		teamName: string,
+		options: { users?: string[]; groups?: string[] } = {},
+	): Promise<AtcTeam> {
+		const url = teamUrl(apiUrl(this.baseUrl), teamName);
+		const body = {
+			auth: { users: options.users ?? [], groups: options.groups ?? [] },
+		};
+		return this.request(url, AtcTeamSchema, {
+			method: "PUT",
+			body: JSON.stringify(body),
+			headers: { "Content-Type": "application/json" },
+		});
+	}
+
 	// --- Jobs ---
 	async listAllJobs(): Promise<AtcJob[]> {
 		return this.request(allJobsUrl(apiUrl(this.baseUrl)), AtcJobArraySchema);
+	}
+
+	/**
+	 * Alias for listAllJobs for API parity and ergonomics.
+	 */
+	async listJobs(): Promise<AtcJob[]> {
+		return this.listAllJobs();
 	}
 
 	/**
@@ -651,6 +652,20 @@ export class ConcourseClient {
 		);
 	}
 
+	/**
+	 * Lists all builds (optionally paginated).
+	 * GET /api/v1/builds
+	 */
+	async listBuilds(page?: Page): Promise<AtcBuild[]> {
+		const params = new URLSearchParams();
+		if (page?.limit) params.set("limit", String(page.limit));
+		if (page?.since) params.set("since", String(page.since));
+		if (page?.until) params.set("until", String(page.until));
+		const base = allBuildsUrl(apiUrl(this.baseUrl));
+		const url = params.toString() ? `${base}?${params.toString()}` : base;
+		return this.request(url, AtcBuildArraySchema);
+	}
+
 	async triggerJobBuild(
 		teamName: string,
 		pipelineName: string,
@@ -676,12 +691,10 @@ export class ConcourseClient {
 
 	// --- Users ---
 	async getUserInfo(): Promise<AtcUserInfo> {
-		console.warn("Method getUserInfo not fully implemented yet.");
 		return this.request(userUrl(apiUrl(this.baseUrl)), AtcUserInfoSchema);
 	}
 
 	async listActiveUsersSince(since: Date): Promise<AtcUser[]> {
-		console.warn("Method listActiveUsersSince not fully implemented yet.");
 		const params = new URLSearchParams({ since: since.toISOString() });
 		const base = usersUrl(apiUrl(this.baseUrl));
 		const url = `${base}?${params.toString()}`;
@@ -695,6 +708,17 @@ export class ConcourseClient {
 	): Promise<AtcResource[]> {
 		return this.request(
 			teamPipelineResourcesUrl(apiUrl(this.baseUrl), teamName, pipelineName),
+			AtcResourceArraySchema,
+		);
+	}
+
+	/**
+	 * Lists all resources.
+	 * GET /api/v1/resources
+	 */
+	async listResources(): Promise<AtcResource[]> {
+		return this.request(
+			allResourcesUrl(apiUrl(this.baseUrl)),
 			AtcResourceArraySchema,
 		);
 	}

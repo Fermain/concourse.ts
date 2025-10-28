@@ -14,6 +14,7 @@ import {
 	teamPipelineResourceTypesUrl,
 	teamPipelineResourcesUrl,
 	teamPipelineUnpauseUrl,
+	teamPipelineUrl,
 } from "../urls";
 
 export interface TeamPipelineClientOptions {
@@ -71,6 +72,17 @@ export class TeamPipelineClient {
 				body: JSON.stringify({ name: newName }),
 				headers: { "Content-Type": "application/json" },
 			},
+			auth,
+		);
+	}
+
+	async delete(): Promise<void> {
+		const api = apiUrl(this.options.baseUrl);
+		const auth = await this.options.auth();
+		await requestJson(
+			teamPipelineUrl(api, this.options.teamName, this.options.pipelineName),
+			z.void(),
+			{ method: "DELETE" },
 			auth,
 		);
 	}

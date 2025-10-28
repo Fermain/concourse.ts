@@ -47,7 +47,8 @@ export async function requestJson<T extends z.ZodTypeAny>(
 	}
 
 	const data = await resp.json();
-	const parsed = schema.safeParse(data);
+	const value = data === null ? undefined : data;
+	const parsed = schema.safeParse(value);
 	if (!parsed.success)
 		throw new ConcourseError(
 			`API response validation failed: ${parsed.error.message}`,
