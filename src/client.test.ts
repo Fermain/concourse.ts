@@ -7,9 +7,14 @@ import {
 	apiUrl,
 	infoUrl,
 	skyIssuerTokenUrl,
+	teamContainerUrl,
+	teamContainersUrl,
 	teamPipelineJobBuildsUrl,
 	teamPipelineResourceCheckUrl,
+	teamPipelineUrl,
+	teamPipelinesUrl,
 	teamUrl,
+	teamVolumesUrl,
 } from "./urls";
 
 const makeClient = () =>
@@ -351,4 +356,86 @@ describe("ConcourseClient", () => {
 			/API request failed: 500/,
 		);
 	});
+});
+
+it("pipeline client: archive/expose/hide issue PUTs", async () => {
+	const client = makeClient();
+	const spy = vi
+		.spyOn(globalThis, "fetch")
+		.mockResolvedValueOnce(new Response(null, { status: 204 }))
+		.mockResolvedValueOnce(new Response(null, { status: 204 }))
+		.mockResolvedValueOnce(new Response(null, { status: 204 }));
+	await client.forPipeline("t", "p").archive();
+	await client.forPipeline("t", "p").expose();
+	await client.forPipeline("t", "p").hide();
+	const m1 = (spy.mock.calls[0][1] as RequestInit).method;
+	const m2 = (spy.mock.calls[1][1] as RequestInit).method;
+	const m3 = (spy.mock.calls[2][1] as RequestInit).method;
+	expect(m1).toBe("PUT");
+	expect(m2).toBe("PUT");
+	expect(m3).toBe("PUT");
+});
+
+it("team client: listPipelines hits team pipelines url", async () => {
+	const client = makeClient();
+	const url = teamPipelinesUrl(apiUrl("https://ci.example.com"), "main");
+	const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(json([]));
+	await client.forTeam("main").listPipelines();
+	expect(spy.mock.calls[0][0]).toBe(url);
+});
+
+it("team client: getPipeline hits team pipeline url", async () => {
+	const client = makeClient();
+	const url = teamPipelineUrl(apiUrl("https://ci.example.com"), "main", "p");
+	const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(json({}));
+	await client.forTeam("main").getPipeline("p");
+	expect(spy.mock.calls[0][0]).toBe(url);
+});
+
+it("team client: listContainers builds query params", async () => {
+	const client = makeClient();
+	const base = teamContainersUrl(apiUrl("https://ci.example.com"), "t");
+	const url = `${base}?type=check&pipeline_id=1&pipeline_name=p&job_id=2&job_name=j&step_name=s&resource_name=r&attempt=a&build_id=3&build_name=bn`;
+	const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(json([]));
+	await client.forTeam("t").listContainers({
+		type: "check",
+		pipelineId: 1,
+		pipelineName: "p",
+		jobId: 2,
+		jobName: "j",
+		stepName: "s",
+		resourceName: "r",
+		attempt: "a",
+		buildId: 3,
+		buildName: "bn",
+	});
+	expect(spy.mock.calls[0][0]).toBe(url);
+});
+
+it("team client: getContainer hits container url", async () => {
+	const client = makeClient();
+	const url = teamContainerUrl(apiUrl("https://ci.example.com"), "t", "cid");
+	const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(json({}));
+	await client.forTeam("t").getContainer("cid");
+	expect(spy.mock.calls[0][0]).toBe(url);
+});
+
+it("team client: listVolumes hits volumes url", async () => {
+	const client = makeClient();
+	const url = teamVolumesUrl(apiUrl("https://ci.example.com"), "t");
+	const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(json([]));
+	await client.forTeam("t").listVolumes();
+	expect(spy.mock.calls[0][0]).toBe(url);
+});
+
+it("pipeline client: saveConfig sends YAML with correct header", async () => {
+	const client = makeClient();
+	const spy = vi
+		.spyOn(globalThis, "fetch")
+		.mockResolvedValueOnce(new Response(null, { status: 204 }));
+	await client.forPipeline("t", "p").saveConfig("foo: bar\n");
+	const init = spy.mock.calls[0][1] as RequestInit;
+	const h = new Headers(init.headers as HeadersInit);
+	expect(init.method).toBe("PUT");
+	expect(h.get("Content-Type")).toBe("application/x-yaml");
 });

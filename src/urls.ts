@@ -46,6 +46,21 @@ export const teamPipelineUnpauseUrl = (
 	teamName: string,
 	pipelineName: string,
 ): string => `${teamPipelineUrl(api, teamName, pipelineName)}/unpause`;
+export const teamPipelineArchiveUrl = (
+	api: string,
+	teamName: string,
+	pipelineName: string,
+): string => `${teamPipelineUrl(api, teamName, pipelineName)}/archive`;
+export const teamPipelineExposeUrl = (
+	api: string,
+	teamName: string,
+	pipelineName: string,
+): string => `${teamPipelineUrl(api, teamName, pipelineName)}/expose`;
+export const teamPipelineHideUrl = (
+	api: string,
+	teamName: string,
+	pipelineName: string,
+): string => `${teamPipelineUrl(api, teamName, pipelineName)}/hide`;
 export const teamPipelineRenameUrl = (
 	api: string,
 	teamName: string,
@@ -176,6 +191,18 @@ export const teamPipelineBuildsUrl = (
 
 export const teamRenameUrl = (api: string, teamName: string): string =>
 	`${teamUrl(api, teamName)}/rename`;
+
+export const teamContainersUrl = (api: string, teamName: string): string =>
+	`${api}/teams/${encodeURIComponent(teamName)}/containers`;
+export const teamContainerUrl = (
+	api: string,
+	teamName: string,
+	containerId: string,
+): string =>
+	`${teamContainersUrl(api, teamName)}/${encodeURIComponent(containerId)}`;
+
+export const teamVolumesUrl = (api: string, teamName: string): string =>
+	`${api}/teams/${encodeURIComponent(teamName)}/volumes`;
 
 export const teamPipelineResourceVersionCausalityUrl = (
 	api: string,

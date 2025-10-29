@@ -3,19 +3,29 @@ import { type RequestAuthContext, requestJson } from "../http/request";
 import {
 	AtcBuildArraySchema,
 	AtcJobArraySchema,
+	AtcJobSchema,
 	AtcResourceArraySchema,
+	AtcResourceSchema,
 } from "../types/atc.schemas";
 import {
 	apiUrl,
+	teamPipelineArchiveUrl,
 	teamPipelineBuildsUrl,
+	teamPipelineConfigUrl,
+	teamPipelineExposeUrl,
+	teamPipelineHideUrl,
+	teamPipelineJobUrl,
 	teamPipelineJobsUrl,
 	teamPipelinePauseUrl,
 	teamPipelineRenameUrl,
 	teamPipelineResourceTypesUrl,
+	teamPipelineResourceUrl,
 	teamPipelineResourcesUrl,
 	teamPipelineUnpauseUrl,
 	teamPipelineUrl,
 } from "../urls";
+import { TeamPipelineJobClient } from "./TeamPipelineJobClient";
+import { TeamPipelineResourceClient } from "./TeamPipelineResourceClient";
 
 export interface TeamPipelineClientOptions {
 	baseUrl: string;
@@ -57,6 +67,51 @@ export class TeamPipelineClient {
 		);
 	}
 
+	async archive(): Promise<void> {
+		const api = apiUrl(this.options.baseUrl);
+		const auth = await this.options.auth();
+		await requestJson(
+			teamPipelineArchiveUrl(
+				api,
+				this.options.teamName,
+				this.options.pipelineName,
+			),
+			z.void(),
+			{ method: "PUT" },
+			auth,
+		);
+	}
+
+	async expose(): Promise<void> {
+		const api = apiUrl(this.options.baseUrl);
+		const auth = await this.options.auth();
+		await requestJson(
+			teamPipelineExposeUrl(
+				api,
+				this.options.teamName,
+				this.options.pipelineName,
+			),
+			z.void(),
+			{ method: "PUT" },
+			auth,
+		);
+	}
+
+	async hide(): Promise<void> {
+		const api = apiUrl(this.options.baseUrl);
+		const auth = await this.options.auth();
+		await requestJson(
+			teamPipelineHideUrl(
+				api,
+				this.options.teamName,
+				this.options.pipelineName,
+			),
+			z.void(),
+			{ method: "PUT" },
+			auth,
+		);
+	}
+
 	async rename(newName: string): Promise<void> {
 		const api = apiUrl(this.options.baseUrl);
 		const auth = await this.options.auth();
@@ -87,6 +142,25 @@ export class TeamPipelineClient {
 		);
 	}
 
+	async saveConfig(pipelineConfig: string): Promise<void> {
+		const api = apiUrl(this.options.baseUrl);
+		const auth = await this.options.auth();
+		await requestJson(
+			teamPipelineConfigUrl(
+				api,
+				this.options.teamName,
+				this.options.pipelineName,
+			),
+			z.void(),
+			{
+				method: "PUT",
+				body: pipelineConfig,
+				headers: { "Content-Type": "application/x-yaml" },
+			},
+			auth,
+		);
+	}
+
 	async listJobs() {
 		const api = apiUrl(this.options.baseUrl);
 		const auth = await this.options.auth();
@@ -102,6 +176,32 @@ export class TeamPipelineClient {
 		);
 	}
 
+	async getJob(jobName: string) {
+		const api = apiUrl(this.options.baseUrl);
+		const auth = await this.options.auth();
+		return requestJson(
+			teamPipelineJobUrl(
+				api,
+				this.options.teamName,
+				this.options.pipelineName,
+				jobName,
+			),
+			AtcJobSchema,
+			{},
+			auth,
+		);
+	}
+
+	forJob(jobName: string) {
+		return new TeamPipelineJobClient({
+			baseUrl: this.options.baseUrl,
+			teamName: this.options.teamName,
+			pipelineName: this.options.pipelineName,
+			jobName,
+			auth: this.options.auth,
+		});
+	}
+
 	async listResources() {
 		const api = apiUrl(this.options.baseUrl);
 		const auth = await this.options.auth();
@@ -115,6 +215,32 @@ export class TeamPipelineClient {
 			{},
 			auth,
 		);
+	}
+
+	async getResource(resourceName: string) {
+		const api = apiUrl(this.options.baseUrl);
+		const auth = await this.options.auth();
+		return requestJson(
+			teamPipelineResourceUrl(
+				api,
+				this.options.teamName,
+				this.options.pipelineName,
+				resourceName,
+			),
+			AtcResourceSchema,
+			{},
+			auth,
+		);
+	}
+
+	forResource(resourceName: string) {
+		return new TeamPipelineResourceClient({
+			baseUrl: this.options.baseUrl,
+			teamName: this.options.teamName,
+			pipelineName: this.options.pipelineName,
+			resourceName,
+			auth: this.options.auth,
+		});
 	}
 
 	async listResourceTypes() {

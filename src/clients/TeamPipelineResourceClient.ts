@@ -9,6 +9,7 @@ import {
 	teamPipelineResourceVersionUrl,
 	teamPipelineResourceVersionsUrl,
 } from "../urls";
+import { TeamPipelineResourceVersionClient } from "./TeamPipelineResourceVersionClient";
 
 export interface TeamPipelineResourceClientOptions {
 	baseUrl: string;
@@ -89,5 +90,16 @@ export class TeamPipelineResourceClient {
 			{},
 			auth,
 		);
+	}
+
+	forVersion(versionId: number) {
+		return new TeamPipelineResourceVersionClient({
+			baseUrl: this.options.baseUrl,
+			teamName: this.options.teamName,
+			pipelineName: this.options.pipelineName,
+			resourceName: this.options.resourceName,
+			versionId,
+			auth: this.options.auth,
+		});
 	}
 }

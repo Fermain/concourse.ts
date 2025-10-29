@@ -164,114 +164,23 @@ export class ConcourseClient {
 		}
 	}
 
-	/**
-	 * Makes an authenticated request to the Concourse API, validates the response, and returns typed data.
-	 */
-	private async request<T extends z.ZodTypeAny>(
-		url: string,
-		schema: T,
-		options: RequestInit = {},
-	): Promise<z.infer<T>> {
-		const urlWithBase = url.startsWith("http") ? url : `${this.baseUrl}${url}`;
-		const headers = new Headers(options.headers);
-
-		if (this.authMethod === "token" && this.token) {
-			headers.set("Authorization", `Bearer ${this.token}`);
-		} else if (this.authMethod === "basic" && this.username && this.password) {
+	private async getAuth(): Promise<RequestAuthContext> {
+		if (this.authMethod === "token" && this.token)
+			return { mode: "token", bearerToken: this.token };
+		if (this.authMethod === "basic" && this.username && this.password) {
 			await this.ensureAuthenticated();
 			const state = this.session?.current;
 			if (state) {
-				headers.set("Authorization", `Bearer ${state.accessToken}`);
-				if (this.isServerVersionLt610(state.serverVersion)) {
-					const csrf = csrfFromIdToken(state.idToken);
-					if (csrf) headers.set("X-Csrf-Token", csrf);
-				}
+				return {
+					mode: "token",
+					bearerToken: state.accessToken,
+					csrfToken: this.isServerVersionLt610(state.serverVersion)
+						? csrfFromIdToken(state.idToken)
+						: undefined,
+				};
 			}
 		}
-
-		headers.set("Accept", "application/json");
-		if (
-			options.method === "POST" ||
-			options.method === "PUT" ||
-			options.method === "PATCH"
-		) {
-			if (!headers.has("Content-Type")) {
-				headers.set("Content-Type", "application/json");
-			}
-		}
-
-		try {
-			const response = await fetch(urlWithBase, {
-				...options,
-				headers,
-			});
-
-			if (!response.ok) {
-				let errorBody = "Unknown error";
-				try {
-					errorBody = await response.text();
-				} catch (e) {
-					/* Ignore */
-				}
-				throw new ConcourseError(
-					`API request failed: ${response.status} ${response.statusText} - ${errorBody}`,
-					response,
-				);
-			}
-
-			// Handle empty response body for success codes like 204
-			if (
-				response.status === 204 ||
-				response.headers.get("Content-Length") === "0"
-			) {
-				// Check if the schema is null, void, or undefined
-				if (
-					schema instanceof z.ZodNull ||
-					schema instanceof z.ZodVoid ||
-					schema instanceof z.ZodUndefined
-				) {
-					// Use safeParse for potentially undefined/null values
-					const validationResult = schema.safeParse(undefined);
-					if (!validationResult.success) {
-						// This should theoretically not happen if the schema is void/null/undefined
-						throw new ConcourseError(
-							"Failed to parse expected empty response",
-							undefined,
-							validationResult.error,
-						);
-					}
-					return validationResult.data;
-				}
-				// If the schema was not null/void/undefined, throw because the empty response is unexpected.
-				throw new ConcourseError(
-					"API returned unexpected empty response for non-empty schema",
-					undefined,
-				);
-			}
-
-			const data = await response.json();
-			const validationResult = schema.safeParse(data);
-
-			if (!validationResult.success) {
-				console.error("Zod Validation Error:", validationResult.error.errors);
-				throw new ConcourseError(
-					`API response validation failed: ${validationResult.error.message}`,
-					undefined,
-					validationResult.error,
-				);
-			}
-
-			return validationResult.data;
-		} catch (error) {
-			if (error instanceof ConcourseError) {
-				throw error; // Re-throw known errors
-			}
-			throw new ConcourseError(
-				`Network or unexpected error during API request to ${urlWithBase}: ${error instanceof Error ? error.message : String(error)}`,
-				undefined,
-				error,
-			);
-		}
+		return { mode: "none" };
 	}
 
 	private parseVersion(version: string): [number, number, number] {
@@ -319,7 +228,8 @@ export class ConcourseClient {
 	 * @returns {Promise<AtcInfo>} Information about the ATC version, worker version, etc.
 	 */
 	async getInfo(): Promise<AtcInfo> {
-		return this.request(infoUrl(apiUrl(this.baseUrl)), AtcInfoSchema);
+		const auth = await this.getAuth();
+		return requestJson(infoUrl(apiUrl(this.baseUrl)), AtcInfoSchema, {}, auth);
 	}
 
 	/**
@@ -328,22 +238,7 @@ export class ConcourseClient {
 	 */
 	forTeam(teamName: string) {
 		const authProvider = async (): Promise<RequestAuthContext> => {
-			if (this.authMethod === "token" && this.token)
-				return { mode: "token", bearerToken: this.token };
-			if (this.authMethod === "basic" && this.username && this.password) {
-				await this.ensureAuthenticated();
-				const state = this.session?.current;
-				if (state) {
-					return {
-						mode: "token",
-						bearerToken: state.accessToken,
-						csrfToken: this.isServerVersionLt610(state.serverVersion)
-							? csrfFromIdToken(state.idToken)
-							: undefined,
-					};
-				}
-			}
-			return { mode: "none" };
+			return this.getAuth();
 		};
 		return new TeamClient({
 			baseUrl: this.baseUrl,
@@ -358,22 +253,7 @@ export class ConcourseClient {
 	 */
 	forPipeline(teamName: string, pipelineName: string) {
 		const authProvider = async (): Promise<RequestAuthContext> => {
-			if (this.authMethod === "token" && this.token)
-				return { mode: "token", bearerToken: this.token };
-			if (this.authMethod === "basic" && this.username && this.password) {
-				await this.ensureAuthenticated();
-				const state = this.session?.current;
-				if (state) {
-					return {
-						mode: "token",
-						bearerToken: state.accessToken,
-						csrfToken: this.isServerVersionLt610(state.serverVersion)
-							? csrfFromIdToken(state.idToken)
-							: undefined,
-					};
-				}
-			}
-			return { mode: "none" };
+			return this.getAuth();
 		};
 		return new TeamPipelineClient({
 			baseUrl: this.baseUrl,
@@ -389,22 +269,7 @@ export class ConcourseClient {
 	 */
 	forJob(teamName: string, pipelineName: string, jobName: string) {
 		const authProvider = async (): Promise<RequestAuthContext> => {
-			if (this.authMethod === "token" && this.token)
-				return { mode: "token", bearerToken: this.token };
-			if (this.authMethod === "basic" && this.username && this.password) {
-				await this.ensureAuthenticated();
-				const state = this.session?.current;
-				if (state) {
-					return {
-						mode: "token",
-						bearerToken: state.accessToken,
-						csrfToken: this.isServerVersionLt610(state.serverVersion)
-							? csrfFromIdToken(state.idToken)
-							: undefined,
-					};
-				}
-			}
-			return { mode: "none" };
+			return this.getAuth();
 		};
 		return new TeamPipelineJobClient({
 			baseUrl: this.baseUrl,
@@ -421,22 +286,7 @@ export class ConcourseClient {
 	 */
 	forResource(teamName: string, pipelineName: string, resourceName: string) {
 		const authProvider = async (): Promise<RequestAuthContext> => {
-			if (this.authMethod === "token" && this.token)
-				return { mode: "token", bearerToken: this.token };
-			if (this.authMethod === "basic" && this.username && this.password) {
-				await this.ensureAuthenticated();
-				const state = this.session?.current;
-				if (state) {
-					return {
-						mode: "token",
-						bearerToken: state.accessToken,
-						csrfToken: this.isServerVersionLt610(state.serverVersion)
-							? csrfFromIdToken(state.idToken)
-							: undefined,
-					};
-				}
-			}
-			return { mode: "none" };
+			return this.getAuth();
 		};
 		return new TeamPipelineResourceClient({
 			baseUrl: this.baseUrl,
@@ -458,22 +308,7 @@ export class ConcourseClient {
 		versionId: number,
 	) {
 		const authProvider = async (): Promise<RequestAuthContext> => {
-			if (this.authMethod === "token" && this.token)
-				return { mode: "token", bearerToken: this.token };
-			if (this.authMethod === "basic" && this.username && this.password) {
-				await this.ensureAuthenticated();
-				const state = this.session?.current;
-				if (state) {
-					return {
-						mode: "token",
-						bearerToken: state.accessToken,
-						csrfToken: this.isServerVersionLt610(state.serverVersion)
-							? csrfFromIdToken(state.idToken)
-							: undefined,
-					};
-				}
-			}
-			return { mode: "none" };
+			return this.getAuth();
 		};
 		return new TeamPipelineResourceVersionClient({
 			baseUrl: this.baseUrl,
@@ -490,22 +325,7 @@ export class ConcourseClient {
 	 */
 	forBuild(buildId: number | string) {
 		const authProvider = async (): Promise<RequestAuthContext> => {
-			if (this.authMethod === "token" && this.token)
-				return { mode: "token", bearerToken: this.token };
-			if (this.authMethod === "basic" && this.username && this.password) {
-				await this.ensureAuthenticated();
-				const state = this.session?.current;
-				if (state) {
-					return {
-						mode: "token",
-						bearerToken: state.accessToken,
-						csrfToken: this.isServerVersionLt610(state.serverVersion)
-							? csrfFromIdToken(state.idToken)
-							: undefined,
-					};
-				}
-			}
-			return { mode: "none" };
+			return this.getAuth();
 		};
 		return new BuildClient({
 			baseUrl: this.baseUrl,
@@ -519,22 +339,7 @@ export class ConcourseClient {
 	 */
 	forWorker(workerName: string) {
 		const authProvider = async (): Promise<RequestAuthContext> => {
-			if (this.authMethod === "token" && this.token)
-				return { mode: "token", bearerToken: this.token };
-			if (this.authMethod === "basic" && this.username && this.password) {
-				await this.ensureAuthenticated();
-				const state = this.session?.current;
-				if (state) {
-					return {
-						mode: "token",
-						bearerToken: state.accessToken,
-						csrfToken: this.isServerVersionLt610(state.serverVersion)
-							? csrfFromIdToken(state.idToken)
-							: undefined,
-					};
-				}
-			}
-			return { mode: "none" };
+			return this.getAuth();
 		};
 		return new WorkerClient({
 			baseUrl: this.baseUrl,
@@ -545,9 +350,12 @@ export class ConcourseClient {
 
 	// --- Pipelines ---
 	async listPipelines(): Promise<AtcPipeline[]> {
-		return this.request(
+		const auth = await this.getAuth();
+		return requestJson(
 			allPipelinesUrl(apiUrl(this.baseUrl)),
 			AtcPipelineArraySchema,
+			{},
+			auth,
 		);
 	}
 
@@ -559,15 +367,24 @@ export class ConcourseClient {
 		teamName: string,
 		pipelineName: string,
 	): Promise<AtcConfig> {
-		return this.request(
+		const auth = await this.getAuth();
+		return requestJson(
 			teamPipelineConfigUrl(apiUrl(this.baseUrl), teamName, pipelineName),
 			AtcConfigSchema,
+			{},
+			auth,
 		);
 	}
 
 	// --- Teams ---
 	async listTeams(): Promise<AtcTeam[]> {
-		return this.request(allTeamsUrl(apiUrl(this.baseUrl)), AtcTeamArraySchema);
+		const auth = await this.getAuth();
+		return requestJson(
+			allTeamsUrl(apiUrl(this.baseUrl)),
+			AtcTeamArraySchema,
+			{},
+			auth,
+		);
 	}
 
 	/**
@@ -582,16 +399,28 @@ export class ConcourseClient {
 		const body = {
 			auth: { users: options.users ?? [], groups: options.groups ?? [] },
 		};
-		return this.request(url, AtcTeamSchema, {
-			method: "PUT",
-			body: JSON.stringify(body),
-			headers: { "Content-Type": "application/json" },
-		});
+		const auth = await this.getAuth();
+		return requestJson(
+			url,
+			AtcTeamSchema,
+			{
+				method: "PUT",
+				body: JSON.stringify(body),
+				headers: { "Content-Type": "application/json" },
+			},
+			auth,
+		);
 	}
 
 	// --- Jobs ---
 	async listAllJobs(): Promise<AtcJob[]> {
-		return this.request(allJobsUrl(apiUrl(this.baseUrl)), AtcJobArraySchema);
+		const auth = await this.getAuth();
+		return requestJson(
+			allJobsUrl(apiUrl(this.baseUrl)),
+			AtcJobArraySchema,
+			{},
+			auth,
+		);
 	}
 
 	/**
@@ -610,9 +439,12 @@ export class ConcourseClient {
 		pipelineName: string,
 		jobName: string,
 	): Promise<AtcJob> {
-		return this.request(
+		const auth = await this.getAuth();
+		return requestJson(
 			teamPipelineJobUrl(apiUrl(this.baseUrl), teamName, pipelineName, jobName),
 			AtcJobSchema,
+			{},
+			auth,
 		);
 	}
 
@@ -637,7 +469,8 @@ export class ConcourseClient {
 			jobName,
 		);
 		const url = params.toString() ? `${base}?${params.toString()}` : base;
-		return this.request(url, AtcBuildArraySchema);
+		const auth = await this.getAuth();
+		return requestJson(url, AtcBuildArraySchema, {}, auth);
 	}
 
 	// --- Builds --- //
@@ -646,9 +479,12 @@ export class ConcourseClient {
 	 * GET /api/v1/builds/{buildId}
 	 */
 	async getBuild(buildId: string | number): Promise<AtcBuild> {
-		return this.request(
+		const auth = await this.getAuth();
+		return requestJson(
 			buildUrl(apiUrl(this.baseUrl), buildId),
 			AtcBuildSchema,
+			{},
+			auth,
 		);
 	}
 
@@ -663,7 +499,8 @@ export class ConcourseClient {
 		if (page?.until) params.set("until", String(page.until));
 		const base = allBuildsUrl(apiUrl(this.baseUrl));
 		const url = params.toString() ? `${base}?${params.toString()}` : base;
-		return this.request(url, AtcBuildArraySchema);
+		const auth = await this.getAuth();
+		return requestJson(url, AtcBuildArraySchema, {}, auth);
 	}
 
 	async triggerJobBuild(
@@ -678,27 +515,38 @@ export class ConcourseClient {
 			jobName,
 		);
 		const options: RequestInit = { method: "POST" };
-		return this.request(url, AtcBuildSummarySchema, options);
+		const auth = await this.getAuth();
+		return requestJson(url, AtcBuildSummarySchema, options, auth);
 	}
 
 	// --- Workers ---
 	async listWorkers(): Promise<AtcWorker[]> {
-		return this.request(
+		const auth = await this.getAuth();
+		return requestJson(
 			allWorkersUrl(apiUrl(this.baseUrl)),
 			AtcWorkerArraySchema,
+			{},
+			auth,
 		);
 	}
 
 	// --- Users ---
 	async getUserInfo(): Promise<AtcUserInfo> {
-		return this.request(userUrl(apiUrl(this.baseUrl)), AtcUserInfoSchema);
+		const auth = await this.getAuth();
+		return requestJson(
+			userUrl(apiUrl(this.baseUrl)),
+			AtcUserInfoSchema,
+			{},
+			auth,
+		);
 	}
 
 	async listActiveUsersSince(since: Date): Promise<AtcUser[]> {
 		const params = new URLSearchParams({ since: since.toISOString() });
 		const base = usersUrl(apiUrl(this.baseUrl));
 		const url = `${base}?${params.toString()}`;
-		return this.request(url, AtcUserArraySchema);
+		const auth = await this.getAuth();
+		return requestJson(url, AtcUserArraySchema, {}, auth);
 	}
 
 	// --- Resources ---
@@ -706,9 +554,12 @@ export class ConcourseClient {
 		teamName: string,
 		pipelineName: string,
 	): Promise<AtcResource[]> {
-		return this.request(
+		const auth = await this.getAuth();
+		return requestJson(
 			teamPipelineResourcesUrl(apiUrl(this.baseUrl), teamName, pipelineName),
 			AtcResourceArraySchema,
+			{},
+			auth,
 		);
 	}
 
@@ -717,9 +568,12 @@ export class ConcourseClient {
 	 * GET /api/v1/resources
 	 */
 	async listResources(): Promise<AtcResource[]> {
-		return this.request(
+		const auth = await this.getAuth();
+		return requestJson(
 			allResourcesUrl(apiUrl(this.baseUrl)),
 			AtcResourceArraySchema,
+			{},
+			auth,
 		);
 	}
 
@@ -727,13 +581,16 @@ export class ConcourseClient {
 		teamName: string,
 		pipelineName: string,
 	): Promise<AtcResourceType[]> {
-		return this.request(
+		const auth = await this.getAuth();
+		return requestJson(
 			teamPipelineResourceTypesUrl(
 				apiUrl(this.baseUrl),
 				teamName,
 				pipelineName,
 			),
 			AtcResourceTypeArraySchema,
+			{},
+			auth,
 		);
 	}
 
@@ -742,7 +599,8 @@ export class ConcourseClient {
 		pipelineName: string,
 		resourceName: string,
 	): Promise<AtcResource> {
-		return this.request(
+		const auth = await this.getAuth();
+		return requestJson(
 			teamPipelineResourceUrl(
 				apiUrl(this.baseUrl),
 				teamName,
@@ -750,6 +608,8 @@ export class ConcourseClient {
 				resourceName,
 			),
 			AtcResourceSchema,
+			{},
+			auth,
 		);
 	}
 
@@ -772,7 +632,8 @@ export class ConcourseClient {
 			resourceName,
 		);
 		const url = params.toString() ? `${base}?${params.toString()}` : base;
-		return this.request(url, AtcResourceVersionArraySchema);
+		const auth = await this.getAuth();
+		return requestJson(url, AtcResourceVersionArraySchema, {}, auth);
 	}
 
 	async checkResource(
@@ -795,6 +656,7 @@ export class ConcourseClient {
 			headers.set("Content-Type", "application/json");
 			options.headers = headers;
 		}
-		return this.request(url, AtcBuildSummarySchema, options);
+		const auth = await this.getAuth();
+		return requestJson(url, AtcBuildSummarySchema, options, auth);
 	}
 }
