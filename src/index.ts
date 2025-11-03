@@ -1,4 +1,11 @@
 export { ConcourseClient } from "./client";
+export { FlyClient } from "./fly";
+export type {
+	FlyClientOptions,
+	FlyBuildOptions,
+	FlyJobsOptions,
+	FlyPipelinesOptions,
+} from "./fly";
 
 export type {
 	AtcInstanceVars,

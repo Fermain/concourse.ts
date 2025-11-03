@@ -39,6 +39,25 @@ await team
 	.createBuild();
 ```
 
+### Fly-style convenience layer
+
+Prefer the shorter commands from the original `Fly.js` helper? Use `FlyClient`:
+
+```typescript
+import { FlyClient } from "concourse.ts";
+
+const fly = FlyClient.create({
+	baseUrl: "https://ci.example.com",
+	teamName: "main",
+	username: "ci-user",
+	password: "ci-password",
+});
+
+const pipelines = await fly.pipelines();
+const jobs = await fly.jobs({ pipeline: "sample" });
+const builds = await fly.builds({ job: "sample/unit-tests", count: 20 });
+```
+
 Every response is validated against the official ATC schema at runtime and returned with rich TypeScript types.
 
 ## `ConcourseClient` surface area

@@ -28,14 +28,15 @@ export const randomContainerId = (): string =>
 export const jsonResponse = (
 	body: unknown,
 	init: Partial<Response> = {},
-): Response =>
-	new Response(JSON.stringify(body), {
+): Response => {
+	const headers = new Headers(init.headers);
+	if (!headers.has("Content-Type"))
+		headers.set("Content-Type", "application/json");
+	return new Response(JSON.stringify(body), {
 		status: init.status ?? 200,
-		headers: {
-			"Content-Type": "application/json",
-			...init.headers,
-		},
+		headers,
 	});
+};
 
 export const emptyResponse = (status = 204): Response =>
 	new Response(null, { status });

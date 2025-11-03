@@ -15,6 +15,7 @@ This directory contains user-facing guides that mirror the structure of the orig
 | [`09-workers.md`](./09-workers.md) | Worker introspection and pruning |
 | [`10-info-and-misc.md`](./10-info-and-misc.md) | Miscellaneous endpoints such as `/info`, `/users`, and utility helpers |
 | [`11-testing-strategy.md`](./11-testing-strategy.md) | Notes on the Vitest suite that mirrors the original Mocha coverage |
+| [`12-fly.md`](./12-fly.md) | Fly helper compatibility layer for quick jobs/pipelines/builds commands |
 
 Each guide links back to both the TypeScript implementation and the equivalent section in the original `concourse.js` project so you can compare approaches or migrate code confidently.
 

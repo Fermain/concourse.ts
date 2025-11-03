@@ -113,9 +113,10 @@ describe("ConcourseClient", () => {
 			.mockResolvedValueOnce(json({ id: 1, name: "main" }));
 
 		await client.setTeam("main", { users: ["u"], groups: ["g"] });
-		const [, init] = fetchSpy.mock.calls[0];
+		const init = fetchSpy.mock.calls[0][1] as RequestInit;
+		expect(init).toBeDefined();
 		expect(init.method).toBe("PUT");
-		expect(JSON.parse(init.body as string)).toEqual({
+		expect(JSON.parse((init.body ?? "") as string)).toEqual({
 			auth: { users: ["u"], groups: ["g"] },
 		});
 		expect(fetchSpy.mock.calls[0][0]).toBe(url);
@@ -175,8 +176,11 @@ describe("ConcourseClient", () => {
 		await client.checkResource("main", "pipe", "res", { ref: "abc" });
 		const [calledUrl, init] = fetchMock.mock.calls[0];
 		expect(calledUrl).toBe(url);
-		expect(init.method).toBe("POST");
-		expect(JSON.parse(init.body)).toEqual({ from: { ref: "abc" } });
+		const requestInit = init as RequestInit;
+		expect(requestInit.method).toBe("POST");
+		expect(JSON.parse((requestInit.body ?? "") as string)).toEqual({
+			from: { ref: "abc" },
+		});
 	});
 
 	it("navigators: forPipeline.pause issues PUT", async () => {
@@ -238,7 +242,8 @@ describe("ConcourseClient", () => {
 		const calls = spy.mock.calls;
 		expect(calls[0][0]).toBe(infoUrl(api));
 		expect(calls[1][0]).toBe(skyIssuerTokenUrl("https://ci.example.com"));
-		const authHeaders = new Headers(calls[2][1].headers);
+		const authInit = calls[2][1] as RequestInit;
+		const authHeaders = new Headers(authInit?.headers);
 		expect(authHeaders.get("Authorization")).toBe("Bearer tok123");
 	});
 

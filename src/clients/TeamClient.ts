@@ -2,7 +2,10 @@ import { z } from "zod";
 import { contentTypeHeader, contentTypes } from "../http/headers";
 import type { RequestAuthContext } from "../http/request";
 import { requestJson } from "../http/request";
-import { AtcBuildArraySchema } from "../types/atc.schemas";
+import {
+	AtcBuildArraySchema,
+	AtcPipelineArraySchema,
+} from "../types/atc.schemas";
 import {
 	apiUrl,
 	teamBuildsUrl,
@@ -77,7 +80,7 @@ export class TeamClient {
 		const auth = await this.options.auth();
 		return requestJson(
 			teamPipelinesUrl(api, this.options.teamName),
-			z.array(z.unknown()),
+			AtcPipelineArraySchema,
 			{},
 			auth,
 		);
