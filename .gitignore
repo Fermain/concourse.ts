@@ -27,6 +27,7 @@
 /.bundle/
 /vendor/bundle
 /lib/bundler/man/
+/dist/
 
 ## IDE:
 .idea

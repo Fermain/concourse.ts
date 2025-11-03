@@ -8,6 +8,23 @@ and this project adheres to
 
 ## Unreleased
 
+## [0.30.0] 2025-11-03
+
+### Added
+
+- Full TypeScript implementation of the Concourse client, including Zod-backed schemas and typed sub-clients.
+- New documentation set in `docs/` mirroring the original concourse.js guides but updated for the typed API.
+- Shared support helpers (`src/http/headers.ts`, `src/http/transformers.ts`, `src/support/date.ts`) reused across clients and auth flows.
+
+### Changed
+
+- Build and test tooling now uses Biome, Vitest, and Husky instead of the previous Babel/Mocha pipeline.
+- Package metadata and scripts updated to reflect the TypeScript toolchain and build process.
+
+### Removed
+
+- Legacy JavaScript runtime, Mocha tests, and Ruby-based release/CI scripts (git-crypt, CircleCI helpers, rake tasks).
+
 ## [0.27.0] 2022-12-22
 
 ### Changed
