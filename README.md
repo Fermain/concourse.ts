@@ -1,101 +1,125 @@
-# Concourse TS Client
+# concourse.ts
 
-A TypeScript client library for interacting with the Concourse CI API.
-
-## Features
-
-*   Provides typed methods for common Concourse API endpoints.
-*   Uses Zod for runtime response validation against official ATC structures.
-*   Leverages inferred types (`z.infer`) for strong compile-time guarantees.
-*   Supports Bearer Token and Basic Authentication.
-*   Built with modern TypeScript and uses `fetch`.
+Modern TypeScript client for the Concourse CI API, providing feature parity with the original [`@infrablocks/concourse`](https://github.com/infrablocks/concourse.js) package and adding end-to-end typing with [Zod](https://zod.dev/).
 
 ## Installation
 
 ```bash
-# Using npm
-npm install <path-to-your-local-package-or-published-name>
-
-# Using yarn
-yarn add <path-to-your-local-package-or-published-name>
+npm install concourse.ts
+# or
+yarn add concourse.ts
 ```
 
-_(Note: Replace `<...>` with the actual package name once published or the local path if using directly)_ 
+> Replace `concourse.ts` with the published package name when it becomes available. For local development you can point the install command at this repository.
 
-## Usage
-
-Import the client and instantiate it with your Concourse API base URL and authentication details.
+## Quick start
 
 ```typescript
-import { ConcourseClient } from './src/client'; // Adjust import path as needed
+import { ConcourseClient } from "concourse.ts";
 
-// --- Option 1: Bearer Token Authentication ---
-const tokenClient = new ConcourseClient({
-  baseUrl: 'https://ci.example.com',
-  token: 'your-long-bearer-token-from-fly-login-etc'
+const client = new ConcourseClient({
+	baseUrl: "https://ci.example.com",
+	username: "my-user",
+	password: "my-password",
+	teamName: "main",
 });
 
-// --- Option 2: Basic Authentication ---
-const basicAuthClient = new ConcourseClient({
-  baseUrl: 'http://localhost:8080', // Example local setup
-  username: 'local_user',
-  password: 'local_password'
-});
+const info = await client.getInfo();
+console.log(info.version);
 
-// --- Option 3: No Authentication (for public endpoints only) ---
-const publicClient = new ConcourseClient({
-  baseUrl: 'https://public-concourse.com'
-});
+const pipelines = await client.listPipelines();
+console.log(pipelines.map((pipeline) => pipeline.name));
 
-// --- Example API Call ---
-async function getConcourseInfo(client: ConcourseClient) {
-  try {
-    const info = await client.getInfo();
-    console.log('Concourse Version:', info.version);
-    console.log('Worker Version:', info.worker_version);
+const team = client.forTeam("main");
+const builds = await team.listBuilds({ limit: 10 });
 
-    // Example listing pipelines (assuming authenticated client)
-    if (client instanceof ConcourseClient && (client[\'token\'] || client[\'username\'])) { // Basic check for auth
-        const pipelines = await client.listPipelines(); // Note: listPipelines might need team context depending on API
-        console.log('Pipelines:', pipelines.map(p => p.name));
-    }
-
-  } catch (error) {
-    console.error('Error interacting with Concourse:', error);
-  }
-}
-
-// Choose the client to use
-getConcourseInfo(tokenClient); 
-// getConcourseInfo(basicAuthClient);
-// getConcourseInfo(publicClient);
-
+await team
+	.forPipeline("sample-pipeline")
+	.forJob("unit-tests")
+	.createBuild();
 ```
 
-## API Methods
+Every response is validated against the official ATC schema at runtime and returned with rich TypeScript types.
 
-See the `ConcourseClient` class definition in `src/client.ts` for available methods and their parameters/return types. Common methods include:
+## `ConcourseClient` surface area
 
-*   `getInfo(): Promise<AtcInfo>`
-*   `listPipelines(): Promise<AtcPipeline[]>`
-*   `getPipelineConfig(teamName: string, pipelineName: string): Promise<AtcConfig>`
-*   `listTeams(): Promise<AtcTeam[]>`
-*   `listAllJobs(): Promise<AtcJob[]>`
-*   `getJob(teamName: string, pipelineName: string, jobName: string): Promise<AtcJob>`
-*   `listJobBuilds(teamName: string, pipelineName: string, jobName: string, page?: Page): Promise<AtcBuild[]>`
-*   `getBuild(buildId: string | number): Promise<AtcBuild>`
-*   `triggerJobBuild(teamName: string, pipelineName: string, jobName: string): Promise<AtcBuildSummary>`
-*   `listWorkers(): Promise<AtcWorker[]>`
-*   `getUserInfo(): Promise<AtcUserInfo>`
-*   `listResourcesForPipeline(teamName: string, pipelineName: string): Promise<AtcResource[]>`
-*   `listResourceVersions(teamName: string, pipelineName: string, resourceName: string, page?: Page): Promise<AtcResourceVersion[]>`
-*   `checkResource(teamName: string, pipelineName: string, resourceName: string, version?: AtcVersion): Promise<AtcBuildSummary>`
-*   ... and more.
+- `getInfo()`
+- `listTeams()` / `setTeam(teamName, options)`
+- `forTeam(teamName)`
+- `listWorkers()` / `forWorker(workerName)`
+- `listPipelines()` / `forPipeline(teamName, pipelineName)`
+- `listAllJobs()` / `listJobs()`
+- `listResources()`
+- `listBuilds(options?)`
+- `getBuild(buildId)` / `forBuild(buildId)`
+- `getUserInfo()` / `listActiveUsersSince(date)`
+- `checkResource(team, pipeline, resource, version?)`
 
-## Contributing
+Each scoped helper returns a dedicated sub-client with focused methods:
 
-_(Add contribution guidelines here if applicable)_ 
+### `BuildClient`
+
+- `listResources()`
+
+### `WorkerClient`
+
+- `prune()`
+
+### `TeamClient`
+
+- `rename(newTeamName)`
+- `destroy()`
+- `listBuilds(options?)`
+- `listContainers(options?)`
+- `getContainer(containerId)`
+- `listVolumes()`
+- `listPipelines()` / `getPipeline(pipelineName)`
+- `forPipeline(pipelineName)`
+
+### `TeamPipelineClient`
+
+- `pause()` / `unpause()` / `archive()` / `expose()` / `hide()`
+- `rename(newName)` / `delete()` / `saveConfig(yaml)`
+- `listJobs()` / `getJob(jobName)` / `forJob(jobName)`
+- `listResources()` / `getResource(resourceName)` / `forResource(resourceName)`
+- `listResourceTypes()`
+- `listBuilds(options?)`
+
+### `TeamPipelineJobClient`
+
+- `pause()` / `unpause()`
+- `listBuilds()` / `getBuild(buildName)`
+- `createBuild()`
+- `listInputs()`
+
+### `TeamPipelineResourceClient`
+
+- `pause()` / `unpause()`
+- `listVersions(options?)`
+- `getVersion(versionId)`
+- `forVersion(versionId)`
+
+### `TeamPipelineResourceVersionClient`
+
+- `getCausality()`
+- `listBuildsWithVersionAsInput()`
+- `listBuildsWithVersionAsOutput()`
+
+All helpers return fully typed data structures defined under `src/types/atc.ts`, mirroring the official Concourse API payloads.
+
+## Running the test suite
+
+```bash
+npm run lint
+npm run test
+```
+
+The Vitest suite mirrors the original Mocha coverage from `concourse.js`, ensuring behavioural parity between the JavaScript and TypeScript clients.
+
+## Documentation
+
+Additional guides and examples live in the [`docs/`](./docs) directory. Start with `docs/README.md` for an index of topics, or jump straight to the endpoint-specific guides (`docs/04-teams.md`, `docs/05-pipelines.md`, etc.).
 
 ## License
 
-_(Specify license, e.g., MIT)_ 
+MIT 

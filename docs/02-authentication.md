@@ -1,34 +1,37 @@
 # 2. Authentication
 
-This document covers the plan for handling authentication with the Concourse API.
+`AuthSession` in `src/auth/session.ts` encapsulates the Concourse authentication flows so the rest of the client can request fresh access tokens on demand. The logic mirrors the legacy `support/http/session.js` from `concourse.js`, but the result is strongly typed.
 
-## Go Source Analysis
+## Supported flows
 
-- Concourse API documentation (how tokens are obtained/used): **Highly Relevant**. The official documentation is crucial for understanding authentication flows and API requirements.
-- `concourse/go-concourse/concourse/client.go`: **Relevant**. Shows how the Go client integrates the HTTP client, which is where authentication headers/mechanisms are typically applied.
-- `concourse/skymarshal/`: **Not Directly Relevant**. This is the Concourse component responsible for authentication *server-side*. We only care about the *client-side* interaction with the API.
-- `concourse/fly/`: **Indirectly Relevant**. The CLI implements various user-facing auth flows. It might provide examples of how to interact with Skymarshal or identity providers to *obtain* tokens, but the TS client itself will likely just *use* pre-obtained tokens or credentials.
+| Server version | Flow | Details |
+| --- | --- | --- |
+| `< 4.0.0` | Team token endpoint | Uses `teamAuthTokenUrl` with basic credentials and extracts the embedded CSRF token from the legacy JWT. |
+| `>= 4.0.0, < 6.1.0` | `sky/token` password grant | Submits username/password, receives bearer token, and reuses it as the ID token. |
+| `>= 6.1.0` | `sky/issuer/token` password grant | Performs the modern OAuth exchange and stores both ID and access tokens, including the CSRF token when required. |
 
-## Authentication Methods
+The helper automatically caches tokens, refreshes them when they are about to expire, and exposes the active auth state via `session.current`.
 
-Concourse supports various authentication methods:
+## Usage
 
-- **Basic Authentication:** Username/password (often for local users).
-- **OAuth / OIDC:** Integration with external identity providers (GitHub, GitLab, UAA, etc.).
-- **Token-Based:** Using bearer tokens obtained via login.
+You rarely interact with `AuthSession` directly—`ConcourseClient` wires it up internally. To opt in, pass `username`/`password` (and optionally `teamName`) to the client constructor. To use bearer tokens, supply `token` instead and the session will run in "token" mode.
 
-## Key Areas
+```typescript
+const client = new ConcourseClient({
+	baseUrl: "https://ci.example.com",
+	username: "ci-user",
+	password: "ci-pass",
+	teamName: "main",
+});
 
-- How the Go client handles different authentication strategies.
-- How tokens are obtained and refreshed (if applicable).
-- Securely storing and managing credentials/tokens within the client.
-- Adding appropriate `Authorization` headers to requests.
+await client.listPipelines(); // triggers authentication automatically
+```
 
-## TypeScript Implementation Plan
+If you need direct access—for example, to inspect expiry data—use:
 
-- [ ] Define an `AuthConfig` interface or structure to hold credentials.
-- [x] Implement method for token-based auth (`setToken`).
-- [ ] Implement strategies for other auth types (e.g., `authenticateWithBasicAuth`, `authenticateWithOIDC`).
-- [x] Modify the `request` method to use the stored token for the `Authorization` header.
-- [ ] Handle token refresh logic if needed (for OIDC).
-- [ ] Add tests for different authentication scenarios. 
+```typescript
+const session = (client as unknown as { session?: AuthSession }).session;
+console.log(session?.current?.expiresAt);
+```
+
+For parity with `concourse.js`, the new `src/http/headers.ts` exposes helpers (`basicAuthorizationHeader`, `bearerAuthorizationHeader`, `csrfTokenHeader`) that you can reuse when writing custom fetch calls or integration tests. 

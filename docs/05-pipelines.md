@@ -1,41 +1,31 @@
 # 5. Pipelines API
 
-Planning for the Pipelines API endpoint implementation.
+Pipeline helpers are exposed through `ConcourseClient` and the nested `TeamPipelineClient` returned by `forPipeline`.
 
-## Go Source Analysis
+## Global helpers
 
-- `concourse/go-concourse/concourse/pipelines.go`: **Highly Relevant**. Implements the client-side logic for the global `ListPipelines` endpoint.
-- Relevant structs in `concourse/atc/pipeline.go`, `concourse/atc/config.go`: **Highly Relevant**. Defines the Go structs (`atc.Pipeline`, `atc.Config`, etc.) used in API requests/responses for pipelines. Essential for TS type definitions.
-- Methods on the `Team` interface in `concourse/go-concourse/concourse/team.go` related to pipelines: **Highly Relevant**. These define the pipeline operations scoped to a team (list, get config, create/update, pause, etc.) that we need to implement in the TS client.
+- `listPipelines()` – enumerate pipelines across all teams.
 
-## Go Client Methods
+## `TeamPipelineClient`
 
-- `ListPipelines()` (Global, likely admin only?)
-- `Team` interface methods:
-    - `Pipeline(pipelineName string)`
-    - `ListPipelines()` (Team-specific)
-    - `PipelineConfig(pipelineName string)`
-    - `CreateOrUpdatePipelineConfig(...)`
-    - `DeletePipeline(pipelineName string)`
-    - `ExposePipeline(pipelineName string)`
-    - `HidePipeline(pipelineName string)`
-    - `PausePipeline(pipelineName string)`
-    - `UnpausePipeline(pipelineName string)`
-    - `RenamePipeline(oldName, newName string)`
-    - ... others ...
+Instantiate one via `client.forTeam("team").forPipeline("pipeline")`. Available operations:
 
-## Key Areas
+- `pause()` / `unpause()` / `archive()` / `expose()` / `hide()`
+- `rename(newName)`
+- `delete()`
+- `saveConfig(yaml: string)` – uploads raw YAML with the correct `Content-Type` header via the new `http/headers` helpers.
+- `listJobs()` / `getJob(jobName)` / `forJob(jobName)`
+- `listResources()` / `getResource(resourceName)` / `forResource(resourceName)`
+- `listResourceTypes()`
+- `listBuilds({ limit?, since?, until? })`
 
-- Distinction between global pipeline listing and team-specific pipelines.
-- Handling pipeline configuration (getting, setting).
-- Actions on pipelines (pause, unpause, expose, hide, delete, rename).
-- Managing pipeline lifecycle.
+All responses are typed (`AtcJob[]`, `AtcResource[]`, etc.).
 
-## TypeScript Implementation Plan
+```typescript
+const pipeline = client.forTeam("main").forPipeline("sample");
+await pipeline.pause();
+const jobs = await pipeline.listJobs();
+await pipeline.saveConfig(await fs.readFile("pipeline.yml", "utf-8"));
+```
 
-- [x] Define `AtcPipeline`, `AtcConfig`, `AtcGroupConfig`, `AtcDisplayConfig` interfaces (in `src/types/`).
-- [x] Implement global `listPipelines()` placeholder (if applicable/needed).
-- [ ] Implement team-specific pipeline methods, either on `ConcourseClient` (taking `teamName`) or a `TeamClient` class.
-- [ ] Implement methods for getting/setting pipeline config.
-- [ ] Implement methods for pipeline actions (pause, unpause, etc.).
-- [ ] Add tests for pipeline operations. 
+The nested sub-clients (`TeamPipelineJobClient`, `TeamPipelineResourceClient`, `TeamPipelineResourceVersionClient`) provide granular control and have parity with the original JavaScript SDK. See the dedicated guides (`06-jobs.md`, `08-resources.md`) for details. 

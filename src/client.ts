@@ -8,6 +8,7 @@ import { TeamPipelineResourceClient } from "./clients/TeamPipelineResourceClient
 import { TeamPipelineResourceVersionClient } from "./clients/TeamPipelineResourceVersionClient";
 import { WorkerClient } from "./clients/WorkerClient";
 import { ConcourseError } from "./errors";
+import { contentTypeHeader, contentTypes } from "./http/headers";
 import type { RequestAuthContext } from "./http/request";
 import { requestJson } from "./http/request";
 import type {
@@ -406,7 +407,7 @@ export class ConcourseClient {
 			{
 				method: "PUT",
 				body: JSON.stringify(body),
-				headers: { "Content-Type": "application/json" },
+				headers: contentTypeHeader(contentTypes.json),
 			},
 			auth,
 		);
@@ -652,9 +653,10 @@ export class ConcourseClient {
 		if (version) {
 			const body = { from: version };
 			options.body = JSON.stringify(body);
-			const headers = new Headers(options.headers);
-			headers.set("Content-Type", "application/json");
-			options.headers = headers;
+			options.headers = {
+				...(options.headers as Record<string, string> | undefined),
+				...contentTypeHeader(contentTypes.json),
+			};
 		}
 		const auth = await this.getAuth();
 		return requestJson(url, AtcBuildSummarySchema, options, auth);

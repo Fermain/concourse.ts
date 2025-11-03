@@ -1,4 +1,10 @@
 import {
+	basicAuthorizationHeader,
+	contentTypeHeader,
+	contentTypes,
+} from "../http/headers";
+import { currentUnixTime } from "../support/date";
+import {
 	apiUrl,
 	infoUrl,
 	skyIssuerTokenUrl,
@@ -54,7 +60,7 @@ export class AuthSession {
 		if (isLt(version, [4, 0, 0])) {
 			const team = teamName ?? "main";
 			const resp = await fetch(teamAuthTokenUrl(api, team), {
-				headers: { Authorization: `Basic ${btoa(`${username}:${password}`)}` },
+				headers: basicAuthorizationHeader(username, password),
 			});
 			if (!resp.ok) throw new Error("Auth (pre v4) failed");
 			const body = (await resp.json()) as { value: string; type: string };
@@ -63,7 +69,7 @@ export class AuthSession {
 				accessToken: body.value,
 				tokenType: body.type,
 				idToken: body.value,
-				expiresAt: payload.exp ?? nowSeconds() + 3600,
+				expiresAt: payload.exp ?? currentUnixTime() + 3600,
 				serverVersion: version,
 			};
 		} else if (isLt(version, [6, 1, 0])) {
@@ -76,8 +82,8 @@ export class AuthSession {
 			const resp = await fetch(skyTokenUrl(baseUrl), {
 				method: "POST",
 				headers: {
-					Authorization: `Basic ${btoa("fly:Zmx5")}`,
-					"Content-Type": "application/x-www-form-urlencoded",
+					...basicAuthorizationHeader("fly", "Zmx5"),
+					...contentTypeHeader(contentTypes.formUrlEncoded),
 				},
 				body: data.toString(),
 			});
@@ -104,8 +110,8 @@ export class AuthSession {
 			const resp = await fetch(skyIssuerTokenUrl(baseUrl), {
 				method: "POST",
 				headers: {
-					Authorization: `Basic ${btoa("fly:Zmx5")}`,
-					"Content-Type": "application/x-www-form-urlencoded",
+					...basicAuthorizationHeader("fly", "Zmx5"),
+					...contentTypeHeader(contentTypes.formUrlEncoded),
 				},
 				body: data.toString(),
 			});
@@ -119,7 +125,7 @@ export class AuthSession {
 			const dateHeader = resp.headers.get("Date");
 			const serverNow = dateHeader
 				? new Date(dateHeader).getTime() / 1000
-				: nowSeconds();
+				: currentUnixTime();
 			state = {
 				accessToken: body.accessToken,
 				tokenType: body.tokenType,
@@ -150,10 +156,6 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
 	}
 }
 
-function nowSeconds(): number {
-	return Math.floor(Date.now() / 1000);
-}
-
 function parseVersion(version: string): [number, number, number] {
 	const [maj, min, patch] = version
 		.split(".")
@@ -172,5 +174,5 @@ function isLt(version: string, cmp: [number, number, number]): boolean {
 
 function isExpired(expiresAtSeconds: number): boolean {
 	const skew = 10 * 60;
-	return nowSeconds() > expiresAtSeconds - skew;
+	return currentUnixTime() > expiresAtSeconds - skew;
 }

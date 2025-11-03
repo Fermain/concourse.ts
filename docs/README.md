@@ -1,35 +1,21 @@
-# Concourse TS Client - Planning Documentation
+# Concourse TS Documentation
 
-This directory contains the planning and design documentation for the `concourse.ts` TypeScript client library. The goal is to build a modern, robust, and well-typed client based on the official Go Concourse client (`go-concourse`).
+This directory contains user-facing guides that mirror the structure of the original `concourse.js` documentation while showcasing the additional typing improvements provided by the TypeScript client.
 
-## Project Goals
+| File | Topic |
+| --- | --- |
+| [`01-client.md`](./01-client.md) | Core client construction, authentication choices, and request lifecycle |
+| [`02-authentication.md`](./02-authentication.md) | Token negotiation flows, session refresh, and CSRF handling |
+| [`03-atc-types.md`](./03-atc-types.md) | Overview of the strongly-typed ATC models exposed via Zod |
+| [`04-teams.md`](./04-teams.md) | Working with teams (`listTeams`, `setTeam`, `TeamClient`) |
+| [`05-pipelines.md`](./05-pipelines.md) | Pipeline operations, configuration management, and scoped helpers |
+| [`06-jobs.md`](./06-jobs.md) | Global job listing plus the `TeamPipelineJobClient` surface |
+| [`07-builds.md`](./07-builds.md) | Build listing, pagination helpers, and `BuildClient` usage |
+| [`08-resources.md`](./08-resources.md) | Resource management, version queries, and resource subclients |
+| [`09-workers.md`](./09-workers.md) | Worker introspection and pruning |
+| [`10-info-and-misc.md`](./10-info-and-misc.md) | Miscellaneous endpoints such as `/info`, `/users`, and utility helpers |
+| [`11-testing-strategy.md`](./11-testing-strategy.md) | Notes on the Vitest suite that mirrors the original Mocha coverage |
 
-- Create a first-principles TypeScript client for the Concourse API.
-- Use the Go client (`concourse/go-concourse/concourse`) as the primary source of truth.
-- Leverage modern TypeScript features for strong typing and developer experience.
-- Provide comprehensive test coverage.
-- Use the existing JS client (`concourse.js`) only as an occasional reference.
+Each guide links back to both the TypeScript implementation and the equivalent section in the original `concourse.js` project so you can compare approaches or migrate code confidently.
 
-## Documentation Structure
-
-This documentation is broken down into several sections, each covering a specific aspect of the client implementation. The focus is on understanding the corresponding Go implementation before writing TypeScript code.
-
-1.  [Core Client (`client.ts`)](./01-client.md)
-2.  [Authentication](./02-authentication.md)
-3.  [ATC Type Definitions](./03-atc-types.md)
-4.  [Teams API](./04-teams.md)
-5.  [Pipelines API](./05-pipelines.md)
-6.  [Jobs API](./06-jobs.md)
-7.  [Builds API](./07-builds.md)
-8.  [Resources API](./08-resources.md)
-9.  [Workers API](./09-workers.md)
-10. [Info & Miscellaneous API](./10-info-and-misc.md)
-11. [Testing Strategy](./11-testing-strategy.md)
-
-## Development Strategy
-
-1.  **Analyze Go Source:** For each section, thoroughly analyze the corresponding files in `concourse/go-concourse/concourse` and `concourse/atc` (for types).
-2.  **Define TypeScript Interfaces:** Define the necessary TypeScript types and interfaces in `concourse.ts/src/types/`.
-3.  **Implement Client Methods:** Implement the client methods in `concourse.ts/src/client.ts` or dedicated modules if necessary.
-4.  **Write Tests:** Write unit and potentially integration tests for the implemented functionality.
-5.  **Iterate:** Refine the implementation and types based on testing and further analysis. 
+If you spot gaps or want to contribute additional examples, please open an issue or submit a pull request. 

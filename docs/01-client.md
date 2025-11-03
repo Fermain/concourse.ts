@@ -1,31 +1,49 @@
-# 1. Core Client (`client.ts`)
+# 1. Concourse client overview
 
-This document outlines the plan for the core `ConcourseClient` class.
+The `ConcourseClient` class is the entry point for the TypeScript SDK. It mirrors the behaviour of the `Client` exported by `@infrablocks/concourse`, but every method now returns strongly-typed results validated with Zod.
 
-## Go Source Analysis
+## Constructing a client
 
-- `concourse/go-concourse/concourse/client.go`: **Highly Relevant**. Defines the primary Go client interface and initialization. This is a key file for understanding the overall structure and methods to implement.
-- `concourse/go-concourse/concourse/internal/`: **Less Relevant**. Contains internal implementation details (connection handling, HTTP agent) specific to the Go client. While potentially interesting for patterns, we will build the TS internals independently. Focus on the public interface in `client.go`.
-- `concourse/go-concourse/concourse/pagination.go`: **Relevant**. Details how pagination is handled in the Go client, which we need to replicate for list endpoints.
+```typescript
+import { ConcourseClient } from "concourse.ts";
 
-## Key Areas
+const client = new ConcourseClient({
+	baseUrl: "https://ci.example.com",
+	username: "ci-user",
+	password: "super-secret",
+	teamName: "main", // optional for >= v4, required for earlier versions
+});
+```
 
-- Client initialization (constructor)
-- Base request method (`request`)
-    - URL construction
-    - Headers (Content-Type, Authorization)
-    - Request/response logging (optional)
-    - Error handling (HTTP status codes, network errors, API errors)
-    - Response parsing (handling JSON, text, streams)
-- Handling pagination (if applicable at the core level, see `concourse/go-concourse/concourse/pagination.go`)
+Supported authentication modes:
 
-## TypeScript Implementation Plan
+- **Bearer token** – provide `token` directly (useful for automation when you already have a token from `fly login`).
+- **Basic credentials** – provide `username`, `password`, and optionally `teamName`; the client negotiates the correct OAuth flow depending on the target Concourse version.
+- **No auth** – omit credentials for read-only public endpoints.
 
-- [x] Review `client.ts` structure.
-- [x] Refine `request` method for robust API error handling (throws `ConcourseApiError`).
-- [x] Refine `parseResponse` for validation errors (throws `ConcourseValidationError`).
-- [ ] Refine `request` method for non-JSON responses/errors.
-- [x] Use Zod schemas for validating and parsing responses (via `parseResponse` helper).
-- [ ] Implement request/response logging (potentially using a dedicated logger).
-- [ ] Investigate Go client's internal connection/HTTP agent details (Low priority).
-- [x] Define common error types (`ConcourseError`, `ConcourseApiError`, `ConcourseValidationError`) in `src/errors.ts`. 
+## Making requests
+
+Every helper delegates to the shared `requestJson` utility in `src/http/request.ts`. Responses are parsed, validated, and returned as typed objects. Failures throw a `ConcourseError` (or specialised subclasses for API/validation errors).
+
+```typescript
+const info = await client.getInfo();
+console.log(info.version);
+
+const builds = await client.listBuilds({ limit: 50 });
+for (const build of builds) {
+	console.log(`${build.team_name}/${build.pipeline_name}#${build.name}`);
+}
+```
+
+## Navigating sub-clients
+
+Call `forTeam`, `forPipeline`, `forJob`, etc. to scope API calls:
+
+```typescript
+const pipeline = client.forTeam("main").forPipeline("sample");
+await pipeline.pause();
+const job = pipeline.forJob("unit-tests");
+await job.createBuild();
+```
+
+See the main [README](../README.md) or the dedicated topic guides for method reference. 

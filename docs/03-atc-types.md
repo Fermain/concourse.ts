@@ -1,38 +1,24 @@
-# 3. ATC Type Definitions
+# 3. ATC type definitions
 
-This document outlines the plan for defining TypeScript interfaces corresponding to the Go structs in the `concourse/atc` package.
+The TypeScript client reproduces the ATC JSON payloads as Zod schemas in `src/types/atc.schemas.ts`. Each schema exports both the runtime validator and the inferred static type used throughout the codebase.
 
-## Go Source Analysis
+## Structure
 
-- `concourse/atc/*.go`: **Highly Relevant**. This directory contains the Go struct definitions for the data transferred via the API. These are the source of truth for our TypeScript interfaces (e.g., `AtcPipeline`, `AtcJob`, `AtcBuild`). We need to analyze the relevant structs and their `json` tags here.
+- `src/types/atc.schemas.ts` – Zod schemas for every ATC object (`AtcPipeline`, `AtcBuild`, `AtcResource`, etc.).
+- `src/types/atc.ts` – Re-exported TypeScript types (`export type AtcPipeline = z.infer<typeof AtcPipelineSchema>`), giving consumers a convenient import path.
+- `src/types/schemas/` – Smaller schema fragments split by resource type for maintainability.
 
-## Key Areas
+Because every response is validated, you get:
 
-- Identifying all relevant structs in `concourse/atc` used by the API endpoints covered by the Go client.
-- Mapping Go types (structs, basic types, slices, maps) to TypeScript types (interfaces, basic types, arrays, Records/mapped types).
-- Handling nested structs.
-- Paying attention to JSON tags (`json:"..."`) in Go structs to ensure correct property naming in TypeScript.
-- Handling potential `nil` or optional fields.
+- **Runtime guarantees**: malformed payloads throw `ConcourseValidationError` with context.
+- **Compile-time safety**: IDE autocomplete works across chained calls (e.g. `client.forTeam("main").listPipelines()` returns `Promise<AtcPipeline[]>`).
 
-## TypeScript Implementation Plan
+## Consuming the types
 
-- [x] Create a dedicated `src/types/atc.ts` directory and file.
-- [x] Systematically go through relevant `concourse/atc/*.go` files.
-- [x] Define interfaces for:
-    - [x] `AtcInfo` (`info.go`)
-    - [x] `AtcTeam`, `AtcTeamAuth` (`team.go`)
-    - [x] `AtcPipeline`, `AtcInstanceVars`, `AtcGroupConfig`, `AtcDisplayConfig` (`pipeline.go`, `config.go`)
-    - [x] `AtcJob`, `AtcJobInput`, `AtcJobOutput`, `AtcVersionConfig` (`job.go`, `resource_types.go`)
-    - [x] `AtcBuild`, `AtcBuildStatus`, `AtcRerunOfBuild`, `AtcBuildSummary` (`build.go`, `summary.go`)
-    - [x] `AtcResource`, `AtcResourceConfig`, `AtcSource`, `AtcCheckEvery`, `AtcTags` (`resource.go`, `config.go`, `resource_types.go`)
-    - [x] `AtcResourceType`, `AtcParams` (`config.go`, `resource_types.go`)
-    - [x] `AtcResourceVersion`, `AtcMetadataField` (`build_inputs_outputs.go`, `resource_types.go`)
-    - [x] `AtcWorker`, `AtcWorkerResourceType` (`worker.go`)
-    - [x] `AtcUser`, `AtcUserInfo` (`user.go`)
-    - [x] `AtcEvent` (discriminated union), `AtcOrigin`, `AtcMetadataField`, etc. (`event/events.go`, `event/types.go`, `resource_types.go`)
-- [ ] Ensure accurate mapping of field names (using JSON tags) and types (ongoing review).
-- [ ] Use utility types like `Partial<>` or optional properties (`?`) for optional fields (done where identified).
-- [ ] Add TSDoc comments to interfaces and properties (done for most).
-- [ ] Consider using a tool or script to aid in the initial generation (skipped for now).
-- [x] Started creating corresponding Zod schemas in `src/types/atc.schemas.ts`.
-- [x] Created corresponding Zod schemas in `src/types/atc.schemas.ts` for most types defined above. 
+```typescript
+import type { AtcPipeline } from "concourse.ts";
+
+const pipelines: AtcPipeline[] = await client.listPipelines();
+```
+
+If you add new endpoints, define the schema in `src/types/schemas/*`, export it via `atc.schemas.ts`, and re-export the inferred type from `atc.ts` to keep the naming consistent with `concourse.js`. 

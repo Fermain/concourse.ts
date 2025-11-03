@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { contentTypeHeader, contentTypes } from "../http/headers";
 import { type RequestAuthContext, requestJson } from "../http/request";
 import {
 	AtcBuildArraySchema,
@@ -125,7 +126,7 @@ export class TeamPipelineClient {
 			{
 				method: "PUT",
 				body: JSON.stringify({ name: newName }),
-				headers: { "Content-Type": "application/json" },
+				headers: contentTypeHeader(contentTypes.json),
 			},
 			auth,
 		);
@@ -155,7 +156,7 @@ export class TeamPipelineClient {
 			{
 				method: "PUT",
 				body: pipelineConfig,
-				headers: { "Content-Type": "application/x-yaml" },
+				headers: contentTypeHeader(contentTypes.yaml),
 			},
 			auth,
 		);

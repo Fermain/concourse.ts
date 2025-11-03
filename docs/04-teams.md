@@ -1,32 +1,39 @@
 # 4. Teams API
 
-Planning for the Teams API endpoint implementation.
+The Teams surface mirrors `concourse.js` and exposes the same helper functions, now typed.
 
-## Go Source Analysis
+## Top-level methods
 
-- `concourse/go-concourse/concourse/teams.go`: **Highly Relevant**. Implements the client-side logic for listing teams.
-- `concourse/go-concourse/concourse/team.go`: **Highly Relevant**. Defines the Go `Team` interface and its methods, representing operations scoped to a specific team. This structure is important for designing the TS client's team interactions.
-- Relevant structs in `concourse/atc/team.go`: **Highly Relevant**. Contains the Go struct definitions (e.g., `atc.Team`) used in the API request/response bodies for team-related endpoints. Needed for TS type definitions.
+- `listTeams()` – fetch all teams across the installation.
+- `setTeam(teamName, { users?, groups? })` – create/update the team's authentication config.
+- `forTeam(teamName)` – return a `TeamClient` for scoped operations.
 
-## Go Client Methods
+```typescript
+const client = new ConcourseClient({ baseUrl, token });
+const teams = await client.listTeams();
+await client.setTeam("main", { users: ["local:ci"], groups: [] });
+const main = client.forTeam("main");
+```
 
-- `ListTeams()`
-- `FindTeam(teamName string)` (Returns a `Team` interface)
-- `Team(teamName string)` (Returns a `Team` interface)
-- `Team` interface methods (likely defined in `team.go`, potentially methods like `CreateOrUpdate`, `RenameTeam`, `DestroyTeam`, `ListPipelines`, etc.)
+## `TeamClient`
 
-## Key Areas
+Methods available on `TeamClient`:
 
-- Understanding the difference between `FindTeam` and `Team`.
-- Mapping the `Team` interface and its methods.
-- Handling team-specific operations (pipelines, builds, etc. might be scoped to a team).
+- `rename(newTeamName)`
+- `destroy()`
+- `listBuilds(options?)`
+- `listContainers(options?)`
+- `getContainer(containerId)`
+- `listVolumes()`
+- `listPipelines()` / `getPipeline(pipelineName)`
+- `forPipeline(pipelineName)`
 
-## TypeScript Implementation Plan
+All list endpoints accept pagination filters identical to `concourse.js` (e.g. `limit`, `since`, `until`). The return values are typed (`AtcBuild[]`, `AtcContainer[]`, etc.).
 
-- [x] Define `AtcTeam` interface (in `src/types/`) based on `concourse/atc/team.go`.
-- [x] Implement `listTeams()` placeholder in `ConcourseClient`.
-- [ ] Consider how to represent the Go `Team` interface. Options:
-    - A dedicated `TeamClient` class returned by `client.getTeam('name')`.
-    - Methods directly on `ConcourseClient` that take `teamName` as an argument (e.g., `listTeamPipelines(teamName)`).
-- [ ] Implement methods corresponding to the Go `Team` interface methods (e.g. `findTeam`).
-- [ ] Add tests for team operations. 
+```typescript
+const team = client.forTeam("main");
+const containers = await team.listContainers({ type: "check", pipelineName: "sample" });
+const pipelineClient = team.forPipeline("sample");
+```
+
+Refer to [`TeamClient.test.ts`](../src/__tests__/TeamClient.test.ts) for end-to-end examples that align with the original Mocha tests. 

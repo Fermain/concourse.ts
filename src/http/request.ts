@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { ConcourseError } from "../errors";
+import { contentTypes } from "./headers";
 
 export interface RequestAuthContext {
 	mode: "none" | "token" | "basic";
@@ -21,7 +22,7 @@ export async function requestJson<T extends z.ZodTypeAny>(
 	if (auth?.csrfToken) headers.set("X-Csrf-Token", auth.csrfToken);
 	if (init.method && ["POST", "PUT", "PATCH"].includes(init.method)) {
 		if (!headers.has("Content-Type"))
-			headers.set("Content-Type", "application/json");
+			headers.set("Content-Type", contentTypes.json);
 	}
 
 	const resp = await fetch(url, { ...init, headers });

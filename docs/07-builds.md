@@ -1,42 +1,34 @@
 # 7. Builds API
 
-Planning for the Builds API endpoint implementation.
+Build operations cover both global listing and scoped helpers.
 
-## Go Source Analysis
+## Global builds
 
-- `concourse/go-concourse/concourse/builds.go`: **Highly Relevant**. Implements client-side logic for listing all builds and getting specific build details.
-- `concourse/go-concourse/concourse/events.go`: **Highly Relevant**. Implements the client-side handling for build event streams (SSE). Crucial for `getBuildEvents()`.
-- `concourse/go-concourse/concourse/build_*.go` (Inputs, outputs, plan, artifacts): **Highly Relevant**. Implement client logic for getting build-related sub-resources like inputs/outputs, plan, and artifacts.
-- Relevant structs in `concourse/atc/build.go`, `concourse/atc/event.go`: **Highly Relevant**. Defines the Go structs (`atc.Build`, `atc.Event`, etc.) used in build API responses. Needed for TS types.
+```typescript
+const builds = await client.listBuilds({ limit: 100, since: 1234 });
+```
 
-## Go Client Methods
+The method accepts optional pagination parameters (`limit`, `since`, `until`). The response is validated against `AtcBuildArraySchema`.
 
-- `Builds(Page)` (List all builds, paginated)
-- `Build(buildID string)`
-- `BuildEvents(buildID string)` (Returns `Events` interface for streaming)
-- `BuildResources(buildID int)` (Inputs/Outputs)
-- `ListBuildArtifacts(buildID string)`
-- `AbortBuild(buildID string)`
-- `BuildPlan(buildID int)`
-- Potentially job-specific build methods (see Jobs API).
+## Single build
 
-## Key Areas
+```typescript
+const build = await client.getBuild(123);
+const resources = await client.forBuild(123).listResources();
+```
 
-- Listing all builds (pagination).
-- Getting details of a specific build.
-- Handling build events (Server-Sent Events - SSE).
-- Getting build resources (inputs, outputs, plan).
-- Accessing build artifacts.
-- Aborting a build.
+`BuildClient` mirrors the JavaScript SDK and currently exposes `listResources()`, returning `AtcResource[]`.
 
-## TypeScript Implementation Plan
+## Triggering builds
 
-- [x] Define `AtcBuild`, `AtcEvent`, `AtcBuildStatus`, `AtcRerunOfBuild`, `AtcBuildSummary`, etc. interfaces (in `src/types/`).
-- [ ] Implement `listBuilds()` with pagination support.
-- [ ] Implement `getBuild()`.
-- [ ] Implement `getBuildEvents()`. This will require handling SSE.
-    - Use `EventSource` API or library.
-    - Return an `AsyncIterable<AtcEvent>` or similar.
-- [ ] Implement methods for getting build resources, artifacts, and plan.
-- [ ] Implement `abortBuild()`.
-- [ ] Add tests for build operations, including event streaming.
+Use the pipeline job helper:
+
+```typescript
+await client
+	.forTeam("main")
+	.forPipeline("sample")
+	.forJob("unit-tests")
+	.createBuild();
+```
+
+The return value is an `AtcBuildSummary`, matching the behaviour of `concourse.js`.

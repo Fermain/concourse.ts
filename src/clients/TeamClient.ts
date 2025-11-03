@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { contentTypeHeader, contentTypes } from "../http/headers";
 import type { RequestAuthContext } from "../http/request";
 import { requestJson } from "../http/request";
 import { AtcBuildArraySchema } from "../types/atc.schemas";
@@ -33,7 +34,7 @@ export class TeamClient {
 			{
 				method: "PUT",
 				body: JSON.stringify({ name: newTeamName }),
-				headers: { "Content-Type": "application/json" },
+				headers: contentTypeHeader(contentTypes.json),
 			},
 			auth,
 		);
